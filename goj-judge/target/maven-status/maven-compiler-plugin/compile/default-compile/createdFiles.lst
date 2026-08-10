@@ -1,0 +1,12 @@
+com\gusl\gojjudge\consumer\JudgeQueueConsumer.class
+com\gusl\gojjudge\sercice\JudgeService.class
+com\gusl\gojjudge\properties\JudgeProperties.class
+com\gusl\gojjudge\mapper\SubmissionMapper.class
+com\gusl\gojjudge\config\JudgeExecutorConfig.class
+com\gusl\gojjudge\controller\JudgeController.class
+com\gusl\gojjudge\sercice\impl\JudgeServiceImpl.class
+com\gusl\gojjudge\mapper\ProblemMapper.class
+com\gusl\gojjudge\mapper\ProblemTestDataMapper.class
+com\gusl\gojjudge\client\GoJudgeClient.class
+com\gusl\gojjudge\GojJudgeApplication.class
+com\gusl\gojjudge\properties\lang\Java11.class

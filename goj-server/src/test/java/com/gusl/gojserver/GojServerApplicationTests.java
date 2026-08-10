@@ -1,0 +1,14 @@
+package com.gusl.gojserver;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+
+@SpringBootTest
+class GojServerApplicationTests {
+
+    @Test
+    void contextLoads() {
+
+    }
+
+}

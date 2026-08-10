@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.gusl.gojserver.mapper.TagMapper">
+
+    <select id="getTagByProblemId" resultType="java.lang.String">
+        select tag_name from problem_tag pt
+        left join tag t on pt.tag_id = t.id
+        where problem_id = #{problemId}
+    </select>
+</mapper>
