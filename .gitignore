@@ -1,0 +1,8 @@
+.idea/
+**/target/
+*.iml
+*.class
+
+HELP.md
+!**/src/main/**/target/
+!**/src/test/**/target/

@@ -4,7 +4,7 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONReader;
 import com.alibaba.fastjson2.JSONWriter;
 import com.alibaba.fastjson2.filter.Filter;
-import com.gusl.common.constant.Constants;
+import com.gusl.common.constant.CommonConstants;
 import org.springframework.data.redis.serializer.RedisSerializer;
 import org.springframework.data.redis.serializer.SerializationException;
 
@@ -21,7 +21,7 @@ public final class FastJson2JsonRedisSerializer<T> implements RedisSerializer<T>
     private final Class<T> type;
 
     public FastJson2JsonRedisSerializer(Class<T> type) {
-        this.type = Objects.requireNonNull(type, "type " + Constants.REQUIRE_NOT_NULL);
+        this.type = Objects.requireNonNull(type, "type " + CommonConstants.REQUIRE_NOT_NULL);
     }
 
     @Override
@@ -34,7 +34,7 @@ public final class FastJson2JsonRedisSerializer<T> implements RedisSerializer<T>
             return JSON.toJSONString(value, JSONWriter.Feature.WriteClassName)
                     .getBytes(StandardCharsets.UTF_8);
         } catch (RuntimeException exception) {
-            throw new SerializationException(Constants.NOT_SERIALIZE_TO_REDIS_VALUE_EXCEPTION, exception);
+            throw new SerializationException(CommonConstants.NOT_SERIALIZE_TO_REDIS_VALUE_EXCEPTION, exception);
         }
     }
 
@@ -48,7 +48,7 @@ public final class FastJson2JsonRedisSerializer<T> implements RedisSerializer<T>
             String json = new String(bytes, StandardCharsets.UTF_8);
             return JSON.parseObject(json, type, AUTO_TYPE_FILTER);
         } catch (RuntimeException exception) {
-            throw new SerializationException(Constants.NOT_SERIALIZE_TO_REDIS_VALUE_EXCEPTION, exception);
+            throw new SerializationException(CommonConstants.NOT_SERIALIZE_TO_REDIS_VALUE_EXCEPTION, exception);
         }
     }
 }
