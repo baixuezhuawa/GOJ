@@ -1,13 +1,15 @@
 goj:
-  judge:
     # 测试数据存放的跟目录, 用于构造测试数据路径
-    data-root: D:\ProgramData\goj-data\testData
-    sandbox-base-url: http://192.0.0.1:5050
-    # 每个语言对应的环境, 目前只有java, 后续...
+  data-root: D:\ProgramData\goj-data\testData
+  submission:
+    max-code-length: 2000 # 字符
     languages:
-      java11:
-        javac: /usr/local/java/jdk11/bin/javac
-        java:  /usr/local/java/jdk11/bin/java
+      - code: java11
+        enabled: true
+        display-name: Java 11
+      - code: py3
+        enabled: true
+        display-name: Python 3
 
 server:
   port: 8080
@@ -15,9 +17,9 @@ server:
 spring:
   application:
     name: goj-server
-  devtools:
-    restart:
-      enabled: false
+#  devtools:
+#    restart:
+#      enabled: false
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver

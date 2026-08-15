@@ -1,4 +1,10 @@
 -------------------------------------------------------------------------------
 Test set: com.gusl.gojjudge.GojJudgeApplicationTests
 -------------------------------------------------------------------------------
-Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 14.07 s -- in com.gusl.gojjudge.GojJudgeApplicationTests
+Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 0.381 s <<< FAILURE! -- in com.gusl.gojjudge.GojJudgeApplicationTests
+com.gusl.gojjudge.GojJudgeApplicationTests.testPy3 -- Time elapsed: 0.012 s <<< ERROR!
+org.junit.jupiter.api.extension.ParameterResolutionException: No ParameterResolver registered for parameter [final com.gusl.gojjudge.client.GoJudgeClient client] in constructor [public com.gusl.gojjudge.GojJudgeApplicationTests(com.gusl.gojjudge.client.GoJudgeClient,com.gusl.gojjudge.adapter.lang.Java11LanguageAdapter,com.gusl.gojjudge.adapter.lang.Py3LanguageAdapter)].
+	at java.base/java.util.Optional.orElseGet(Optional.java:364)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+

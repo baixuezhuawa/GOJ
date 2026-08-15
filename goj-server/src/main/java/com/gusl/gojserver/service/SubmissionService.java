@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.gusl.gojserver.pojo.dto.SubmissionDto;
 import com.gusl.gojserver.pojo.entity.LoginUser;
 import com.gusl.common.pojo.entity.Submission;
+import com.gusl.gojserver.pojo.vo.SubmissionVo;
 
 public interface SubmissionService extends IService<Submission> {
 
@@ -12,4 +13,6 @@ public interface SubmissionService extends IService<Submission> {
      * @param submissionDto 提交信息
      */
     void submitProblemToJudge(SubmissionDto submissionDto, LoginUser loginUser);
+
+    SubmissionVo getSubmissionById(Long submissionId);
 }

@@ -7,11 +7,35 @@ goj:
     # 测试数据存放的跟目录, 用于构造测试数据路径
     data-root: D:\ProgramData\goj-data\testData
     sandbox-base-url: http://192.168.100.128:5050
-    # 每个语言对应的环境, 目前只有java, 后续...
+    # Judge 端只在这里配置实际可执行的语言工具链；server 端另外维护对外可提交语言目录。
     languages:
       java11:
+        code: java11
+        # 以下路径是沙箱镜像内的路径，不是 Judge 宿主机路径。
         javac: /usr/local/java/jdk11/bin/javac
         java:  /usr/local/java/jdk11/bin/java
+        jar: /usr/local/java/jdk11/bin/jar
+        env: PATH=/usr/local/java/jdk11/bin:/usr/bin:/bin
+        active-cache-file-name: Main.jar
+        compile:
+          # GOJ 配置使用 ms/KB；Adapter 发给 go-judge 前会转换成 ns/bytes。
+          cpu-limit-ms: 10000
+          real-cpu-limit-ms: 30000
+          memory-limit-kb: 524288
+          stack-limit-kb: 131072
+          proc-limit: 64
+          stdout-limit-bytes: 16777216
+          stderr-limit-bytes: 16777216
+
+      py3:
+        code: py3
+        python: /usr/bin/python3
+        env: PYTHONIOENCODING=utf-8
+        active-file-name: Main.py
+
+
+
+
 
 server:
   port: 8081
@@ -81,4 +105,3 @@ springdoc:
         - /**
       packages-to-scan:
         - com.gusl.gojjudge.controller
-
