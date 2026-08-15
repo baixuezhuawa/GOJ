@@ -32,4 +32,17 @@ public class StringUtils {
         }
         return true;
     }
+
+    public static boolean exists(String tar, String... str){
+        if(tar == null || str == null) return false;
+
+        for(String s : str){
+            if(s == null) continue;
+            if(tar.equals(s)){
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

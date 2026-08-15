@@ -4,8 +4,7 @@
 # 目前先保持一样的配置先
 goj:
   judge:
-    # 测试数据存放的跟目录, 用于构造测试数据路径
-    data-root: D:\ProgramData\goj-data\testData
+    data-root: D:\ProgramData\goj-data
     sandbox-base-url: http://192.168.100.128:5050
     # Judge 端只在这里配置实际可执行的语言工具链；server 端另外维护对外可提交语言目录。
     languages:

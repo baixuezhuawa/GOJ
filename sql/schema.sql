@@ -112,7 +112,8 @@ CREATE TABLE `problem` (
     `example_note` TEXT DEFAULT NULL COMMENT '样例说明',
     `difficulty` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '题目难度分',
     `author_id` BIGINT NOT NULL COMMENT '出题人用户 id',
-    `status` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '题目状态：0 草稿，1 已发布，2 已停用',
+    `status` TINYINT UNSIGNED NOT NULL DEFAULT 0
+        COMMENT '题目状态：0 草稿，1 已发布，2 已停用，3 待审核，4 已退回',
 
     `create_by` VARCHAR(64) DEFAULT NULL COMMENT '创建人',
     `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -128,41 +129,19 @@ CREATE TABLE `problem` (
   COLLATE = utf8mb4_unicode_ci
   COMMENT = '题目表';
 
-DROP TABLE IF EXISTS `problem_case`;
-CREATE TABLE `problem_case` (
-    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '测试用例 id',
-    `problem_id` BIGINT NOT NULL COMMENT '题目 id',
-    `input_data` LONGTEXT NOT NULL COMMENT '测试输入',
-    `expected_output` LONGTEXT NOT NULL COMMENT '预期输出',
-    `is_sample` TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '是否公开样例：1 是，0 否',
-    `sort_order` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '展示和执行顺序',
-    `score` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '该测试点分值',
-    `explanation` TEXT DEFAULT NULL COMMENT '样例说明，可为空',
-    `create_by` VARCHAR(64) DEFAULT NULL COMMENT '创建人',
-    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `update_by` VARCHAR(64) DEFAULT NULL COMMENT '更新人',
-    `update_time` DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
-    PRIMARY KEY (`id`),
-    KEY `idx_problem_case_problem_id` (`problem_id`),
-    KEY `idx_problem_case_sample_order` (`problem_id`, `is_sample`, `sort_order`)
-) ENGINE = InnoDB
-  DEFAULT CHARACTER SET = utf8mb4
-  COLLATE = utf8mb4_unicode_ci
-  COMMENT = '题目样例和隐藏测试用例表';
 
 
 DROP TABLE IF EXISTS `problem_test_data`;
 CREATE TABLE `problem_test_data` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '测试数据集 id',
     `problem_id` BIGINT NOT NULL COMMENT '题目 id',
-    `version` INT UNSIGNED NOT NULL COMMENT '测试数据版本',
+    `version` INT UNSIGNED  COMMENT '测试数据版本',
     `test_node_count` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '测试点数量',
     `archive_name` VARCHAR(255) NOT NULL COMMENT '原始压缩包名称',
-    `storage_path` VARCHAR(512) NOT NULL COMMENT '解压后的存储路径',
+    `storage_path` VARCHAR(512) COMMENT '测试数据目录的相对路径',
     `archive_sha256` CHAR(64) DEFAULT NULL COMMENT '压缩包 SHA-256',
     `status` VARCHAR(16) NOT NULL DEFAULT 'UPLOADING'
-        COMMENT '状态：UPLOADING、READY、INVALID、RETIRED',
+        COMMENT '状态：UPLOADING、UPLOADED、EXTRACTED、READY、INVALID、RETIRED',
     `active` TINYINT UNSIGNED NOT NULL DEFAULT 0
         COMMENT '是否为当前启用版本：1 是，0 否',
     `create_by` VARCHAR(64) DEFAULT NULL COMMENT '创建人',
@@ -228,6 +207,7 @@ CREATE TABLE `submission` (
     `compiler_msg` TEXT DEFAULT NULL COMMENT '编译器输出信息',
     `judge_msg` TEXT DEFAULT NULL COMMENT '评测或运行信息',
     `submission_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '提交时间',
+    `source_sha256` CHAR(64) NOT NULL COMMENT '源代码 SHA-256',
     `judge_start_time` DATETIME DEFAULT NULL COMMENT '评测开始时间',
     `judge_end_time` DATETIME DEFAULT NULL COMMENT '评测结束时间',
     `create_by` VARCHAR(64) DEFAULT NULL COMMENT '创建人',
@@ -243,3 +223,37 @@ CREATE TABLE `submission` (
   DEFAULT CHARACTER SET = utf8mb4
   COLLATE = utf8mb4_unicode_ci
   COMMENT = '代码提交和评测结果表';
+
+
+DROP TABLE IF EXISTS `problem_review_submission`;
+CREATE TABLE `problem_review_submission` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '验题提交 id',
+    `problem_id` BIGINT NOT NULL COMMENT '待审核题目 id',
+    `problem_test_data_id` BIGINT NOT NULL COMMENT '本次验题使用的测试数据集 id',
+    `reviewer_id` BIGINT NOT NULL COMMENT '执行验题的管理员 id',
+    `language` VARCHAR(32) NOT NULL COMMENT '编程语言编码',
+    `source_code` LONGTEXT NOT NULL COMMENT '管理员验题源代码',
+    `status` VARCHAR(32) NOT NULL DEFAULT 'in queue' COMMENT '验题状态',
+    `score` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '测评得分',
+    `time_ms` INT UNSIGNED DEFAULT NULL COMMENT '运行耗时，单位毫秒',
+    `memory_kb` INT UNSIGNED DEFAULT NULL COMMENT '运行内存，单位 KB',
+    `compiler_msg` TEXT DEFAULT NULL COMMENT '编译器输出信息',
+    `judge_msg` TEXT DEFAULT NULL COMMENT '测评或运行信息',
+    `submission_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '验题任务提交时间',
+    `source_sha256` CHAR(64) NOT NULL COMMENT '源代码 SHA-256',
+    `judge_start_time` DATETIME DEFAULT NULL COMMENT '测评开始时间',
+    `judge_end_time` DATETIME DEFAULT NULL COMMENT '测评结束时间',
+    `create_by` VARCHAR(64) DEFAULT NULL COMMENT '创建人',
+    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_by` VARCHAR(64) DEFAULT NULL COMMENT '更新人',
+    `update_time` DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    PRIMARY KEY (`id`),
+    KEY `idx_problem_review_submission_problem_time` (`problem_id`, `submission_time`),
+    KEY `idx_problem_review_submission_reviewer_time` (`reviewer_id`, `submission_time`),
+    KEY `idx_problem_review_submission_status` (`status`),
+    KEY `idx_problem_review_submission_test_data` (`problem_test_data_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARACTER SET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci
+  COMMENT = '管理员验题提交和测评结果表';

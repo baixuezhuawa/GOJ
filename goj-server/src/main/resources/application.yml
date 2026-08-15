@@ -1,6 +1,7 @@
 goj:
     # 测试数据存放的跟目录, 用于构造测试数据路径
-  data-root: D:\ProgramData\goj-data\testData
+  data-root: D:\ProgramData\goj-data
+
   submission:
     max-code-length: 2000 # 字符
     languages:
@@ -17,9 +18,12 @@ server:
 spring:
   application:
     name: goj-server
-#  devtools:
-#    restart:
-#      enabled: false
+
+  servlet:
+    # 上传文件大小限制
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 52MB
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver

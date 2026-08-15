@@ -12,7 +12,7 @@ public interface SubmissionService extends IService<Submission> {
      * 将用户的提交, 提交到测评机
      * @param submissionDto 提交信息
      */
-    void submitProblemToJudge(SubmissionDto submissionDto, LoginUser loginUser);
+    Long submitProblemToJudge(SubmissionDto submissionDto, LoginUser loginUser);
 
     SubmissionVo getSubmissionById(Long submissionId);
 }

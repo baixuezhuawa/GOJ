@@ -13,8 +13,8 @@ import lombok.EqualsAndHashCode;
 /**
  * 题目实体，保存题面、限制、难度和发布状态。
  *
- * <p>公开样例保留在题目表中；隐藏测试数据放在 problem_case 表中，
- * 避免普通题目详情接口直接返回测试数据。</p>
+ * <p>公开样例保留在题目表中；隐藏测试数据由 {@code problem_test_data}
+ * 及其文件目录管理，避免普通题目详情接口直接返回测试数据。</p>
  */
 @Tag(name = "题目实体")
 @EqualsAndHashCode(callSuper = true)
@@ -73,7 +73,8 @@ public class Problem extends BaseEntity {
     @Schema(description = "出题人用户 id")
     private Long authorId;
 
-    /** 题目状态：0 草稿，1 已发布，2 已停用。 */
-    @Schema(description = "题目状态：0 草稿，1 已发布，2 已停用")
+    /** 题目状态：0 草稿，1 已发布，2 已停用，3 待审核，4 已退回。 */
+    @Schema(description = "题目状态：0 草稿，1 已发布，2 已停用，3 待审核，4 已退回")
     private Integer status;
+
 }
