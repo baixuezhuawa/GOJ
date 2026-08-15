@@ -55,9 +55,6 @@ public class Java11LanguageAdapter extends AbstractLanguageAdapter {
     /**
      * 构造 Java 编译请求。
      *
-     * <p>源代码以 {@code Main.java} 写入沙箱，编译命令生成 {@code Main.jar}；
-     * 该 jar 会被缓存，供后续所有测试点复用。</p>
-     *
      * @param sourceCode 用户提交的 Java 源码
      * @return go-judge 编译请求体
      */
@@ -150,9 +147,10 @@ public class Java11LanguageAdapter extends AbstractLanguageAdapter {
     @Override
     protected List<String> buildCompileArgs() {
         String command = String.format(
-                "%s -encoding UTF-8 Main.java && %s -cf Main.jar *.class",
+                "%s -encoding UTF-8 Main.java && %s -cf %s *.class",
                 java11.getJavac(),
-                java11.getJar()
+                java11.getJar(),
+                java11.getActiveCacheFileName()
         );
         return List.of("/bin/bash", "-c", command);
     }

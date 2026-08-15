@@ -1,17 +1,21 @@
 package com.gusl.gojjudge.sercice;
 
-import java.io.IOException;
-
 /**
  * Judge 测评服务接口。
  */
 public interface JudgeService {
 
     /**
-     * 执行指定提交的测评任务。
+     * 执行普通用户提交的测评任务。
      *
-     * @param taskId 提交记录 ID
-     * @throws IOException 读取本地测试数据失败时抛出
+     * @param submissionId 用户提交 id
      */
-    void judge(Long taskId) throws IOException;
+    void judgeSubmission(Long submissionId);
+
+    /**
+     * 执行管理员验题提交的测评任务。
+     *
+     * @param reviewSubmissionId 验题提交 id
+     */
+    void judgeProblemReview(Long reviewSubmissionId);
 }

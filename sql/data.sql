@@ -142,22 +142,26 @@ INSERT IGNORE INTO `problem` (
 -- problem_id 是题目 ID，tag_id 是标签 ID。
 -- 例如 (1, 1, 8) 表示：关联记录 1，把题目 1 关联到标签 8（数学）。
 -- =========================
--- problem_test_data seed metadata
+-- 题目测试数据元信息
 -- =========================
--- The hidden test files live under storage_path/test1..testN.
--- archive_name is a logical development dataset name; no archive hash is set
--- because the current seed uses the extracted directory directly.
+-- 隐藏测试文件位于 storage_path/test1..testN。
+-- 当前初始化数据直接使用已解压目录，因此 archive_name 只作为逻辑名称，archive_sha256 留空。
 INSERT IGNORE INTO `problem_test_data` (
     `id`, `problem_id`, `version`, `test_node_count`,
     `archive_name`, `storage_path`, `archive_sha256`,
     `status`, `active`, `create_by`, `remark`
 ) VALUES
-    (1, 1, 1, 3, 'p1-testdata-v1', '/srv/goj-data/testData/p1', NULL, 'READY', 1, 'system', 'seed test data directory'),
-    (2, 2, 1, 3, 'p2-testdata-v1', '/srv/goj-data/testData/p2', NULL, 'READY', 1, 'system', 'seed test data directory'),
-    (3, 3, 1, 3, 'p3-testdata-v1', '/srv/goj-data/testData/p3', NULL, 'READY', 1, 'system', 'seed test data directory'),
-    (4, 4, 1, 3, 'p4-testdata-v1', '/srv/goj-data/testData/p4', NULL, 'READY', 1, 'system', 'seed test data directory'),
-    (5, 5, 1, 3, 'p5-testdata-v1', '/srv/goj-data/testData/p5', NULL, 'READY', 1, 'system', 'seed test data directory'),
-    (6, 6, 1, 3, 'p6-testdata-v1', '/srv/goj-data/testData/p6', NULL, 'READY', 1, 'system', 'seed test data directory');
+    (1, 1, 1, 3, 'p1-testdata-v1', 'D:/ProgramData/goj-data/testData/p1/v1', NULL, 'READY', 1, 'system', 'seed test data directory'),
+    (2, 2, 1, 3, 'p2-testdata-v1', 'D:/ProgramData/goj-data/testData/p2/v1', NULL, 'READY', 1, 'system', 'seed test data directory'),
+    (3, 3, 1, 3, 'p3-testdata-v1', 'D:/ProgramData/goj-data/testData/p3/v1', NULL, 'READY', 1, 'system', 'seed test data directory'),
+    (4, 4, 1, 3, 'p4-testdata-v1', 'D:/ProgramData/goj-data/testData/p4/v1', NULL, 'READY', 1, 'system', 'seed test data directory'),
+    (5, 5, 1, 3, 'p5-testdata-v1', 'D:/ProgramData/goj-data/testData/p5/v1', NULL, 'READY', 1, 'system', 'seed test data directory'),
+    (6, 6, 1, 3, 'p6-testdata-v1', 'D:/ProgramData/goj-data/testData/p6/v1', NULL, 'READY', 1, 'system', 'seed test data directory');
+
+-- 已存在的旧种子记录统一改为绝对路径，运行时代码只处理一种 storage_path 格式。
+UPDATE `problem_test_data`
+SET `storage_path` = CONCAT('D:/ProgramData/goj-data/testData/', `storage_path`)
+WHERE `storage_path` IN ('p1/v1', 'p2/v1', 'p3/v1', 'p4/v1', 'p5/v1', 'p6/v1');
 
 INSERT IGNORE INTO `problem_tag` (`id`, `problem_id`, `tag_id`, `create_by`, `remark`) VALUES
     (1, 1, 8, 'system', 'A+B Problem -> 数学'),

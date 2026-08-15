@@ -1,6 +1,7 @@
 package com.gusl.common.pojo.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.gusl.common.common.BaseEntity;
@@ -79,4 +80,8 @@ public class Submission extends BaseEntity {
     /** 评测完成的时间。 */
     @Schema(description = "评测结束时间")
     private LocalDateTime judgeEndTime;
+
+    @Schema(description = "源代码的sha256值, 用于判断重复提交")
+    @TableField("source_sha256")
+    private String sourceSha256;
 }

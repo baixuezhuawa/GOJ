@@ -1,26 +1,29 @@
 package com.gusl.gojjudge.sercice.impl;
 
-import cn.hutool.core.util.ObjectUtil;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.gusl.common.constant.JudgingConstant;
+import com.gusl.common.constant.ProblemStatus;
+import com.gusl.common.constant.ProblemTestDataStatus;
 import com.gusl.common.constant.SandBoxStatus;
 import com.gusl.common.constant.SystemConstant;
 import com.gusl.common.pojo.entity.Problem;
+import com.gusl.common.pojo.entity.ProblemReviewSubmission;
 import com.gusl.common.pojo.entity.ProblemTestData;
 import com.gusl.common.pojo.entity.Submission;
 import com.gusl.gojjudge.adapter.AbstractLanguageAdapter;
 import com.gusl.gojjudge.client.GoJudgeClient;
 import com.gusl.gojjudge.exception.*;
 import com.gusl.gojjudge.mapper.ProblemMapper;
+import com.gusl.gojjudge.mapper.ProblemReviewSubmissionMapper;
 import com.gusl.gojjudge.mapper.ProblemTestDataMapper;
 import com.gusl.gojjudge.mapper.SubmissionMapper;
 import com.gusl.gojjudge.pojo.entity.*;
-import com.gusl.gojjudge.properties.JudgeProperties;
 import com.gusl.gojjudge.sercice.JudgeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -28,6 +31,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * 测评流程编排服务。
@@ -41,8 +47,28 @@ import java.util.List;
 @RequiredArgsConstructor
 public class JudgeServiceImpl implements JudgeService {
 
+    /** 终态集合，用于判断何时写入测评结束时间。 */
+    private static final Set<String> TERMINAL_STATUSES = Set.of(
+            JudgingConstant.COMPILE_ERROR,
+            JudgingConstant.WRONG_ANSWER,
+            JudgingConstant.ACCEPTED,
+            JudgingConstant.TIME_LIMIT_EXCEEDED,
+            JudgingConstant.MEMORY_LIMIT_EXCEEDED,
+            JudgingConstant.RUNTIME_ERROR,
+            SystemConstant.SYSTEM_ERROR
+    );
+
+    @Value("${goj.judge.data-root}")
+    private String dataRoot;
+
+    /** 公共测评流程所需的题目和测试数据。*/
+    private record JudgeMaterial(Problem problem, ProblemTestData testData) { }
+
     /** 提交记录 Mapper，用于读取源码并更新测评状态和结果。 */
     private final SubmissionMapper submissionMapper;
+
+    /** 管理员验题提交 Mapper，用于读取验题源码并写回独立测评结果。 */
+    private final ProblemReviewSubmissionMapper reviewSubmissionMapper;
 
     /** 题目 Mapper，用于读取运行时的时间和内存限制。 */
     private final ProblemMapper problemMapper;
@@ -53,109 +79,177 @@ public class JudgeServiceImpl implements JudgeService {
     /** go-judge HTTP 客户端；所有编译和运行请求都通过它进入沙箱。 */
     private final GoJudgeClient goJudgeClient;
 
-    /** Judge 模块配置，包含测试数据根目录和沙箱地址。 */
-    private final JudgeProperties judgeProperties;
-
     /** Spring 会自动注入所有 AbstractGoJudgeLanguageAdapter 的实现 Bean。 */
     private final List<AbstractLanguageAdapter> languageAdapters;
 
 
 
+    /**
+     * 领取并执行普通用户提交。
+     */
     @Override
-    public void judge(Long taskId) {
-        // 保持任务领取的原子性
-        int updateEffectLines = submissionMapper.update(
+    public void judgeSubmission(Long submissionId) {
+        // 第一步：仅允许一个 Worker 把任务从排队状态推进到等待状态。
+        int affectedRows = submissionMapper.update(
                 Wrappers.<Submission>lambdaUpdate()
                         .set(Submission::getStatus, JudgingConstant.WAIT)
                         .set(Submission::getJudgeStartTime, LocalDateTime.now())
-                        .eq(Submission::getId, taskId)
+                        .eq(Submission::getId, submissionId)
                         .eq(Submission::getStatus, JudgingConstant.IN_QUEUE)
         );
-        if(updateEffectLines == 0){
-            log.info("taskId{}: 当前测评任务不存在或者已被处理", taskId);
-            return ;
+        if (affectedRows == 0) {
+            log.info("普通提交 {} 不存在或已被其他 Worker 处理", submissionId);
+            return;
         }
 
-        // 通过这个对象统一编译和运行状态的度量
-        JudgeOutcome judgeOutcome = new JudgeOutcome();
-        // 更新测评状态 等待
-        judgeOutcome.setCurStatus(JudgingConstant.WAIT);
+        // 第二步：普通提交只从 submission 表读取，并固定加载已发布题目和正式测试数据。
         Submission submission = submissionMapper.selectOne(
                 Wrappers.<Submission>lambdaQuery()
-                        .eq(Submission::getId, taskId)
+                        .eq(Submission::getId, submissionId)
                         .eq(Submission::getStatus, JudgingConstant.WAIT)
         );
+        if (submission == null) {
+            log.error("普通提交 {} 领取成功后无法读取记录", submissionId);
+            return;
+        }
 
+        // 第三步：把明确的普通提交数据交给公共测评流程。
+        executeJudge(
+                "普通提交 " + submissionId,
+                submission.getLanguage(),
+                submission.getSourceCode(),
+                () -> loadPublishedMaterial(submission.getProblemId()),
+                outcome -> updateSubmission(submissionId, outcome)
+        );
+    }
 
+    /**
+     * 领取并执行管理员验题提交。
+     */
+    @Override
+    public void judgeProblemReview(Long reviewSubmissionId) {
+        // 第一步：验题任务只在 problem_review_submission 表中领取。
+        int affectedRows = reviewSubmissionMapper.update(
+                Wrappers.<ProblemReviewSubmission>lambdaUpdate()
+                        .set(ProblemReviewSubmission::getStatus, JudgingConstant.WAIT)
+                        .set(ProblemReviewSubmission::getJudgeStartTime, LocalDateTime.now())
+                        .eq(ProblemReviewSubmission::getId, reviewSubmissionId)
+                        .eq(ProblemReviewSubmission::getStatus, JudgingConstant.IN_QUEUE)
+        );
+        if (affectedRows == 0) {
+            log.info("管理员验题提交 {} 不存在或已被其他 Worker 处理", reviewSubmissionId);
+            return;
+        }
+
+        // 第二步：验题任务只从独立验题表读取，并使用创建任务时固定的测试数据集 id。
+        ProblemReviewSubmission submission = reviewSubmissionMapper.selectOne(
+                Wrappers.<ProblemReviewSubmission>lambdaQuery()
+                        .eq(ProblemReviewSubmission::getId, reviewSubmissionId)
+                        .eq(ProblemReviewSubmission::getStatus, JudgingConstant.WAIT)
+        );
+        if (submission == null) {
+            log.error("管理员验题提交 {} 领取成功后无法读取记录", reviewSubmissionId);
+            return;
+        }
+
+        // 第三步：把明确的验题数据交给同一个公共测评流程。
+        executeJudge(
+                "管理员验题提交 " + reviewSubmissionId,
+                submission.getLanguage(),
+                submission.getSourceCode(),
+                () -> loadProblemReviewMaterial(submission.getProblemId(), submission.getProblemTestDataId()),
+                outcome -> updateProblemReviewSubmission(reviewSubmissionId, outcome)
+        );
+    }
+
+    /**
+     * 执行两类任务共用的编译、运行、结果比较和异常映射流程。
+     *
+     * @param taskLabel 日志中的任务标识
+     * @param language 语言编码
+     * @param sourceCode 源代码
+     * @param materialLoader 对应业务的数据加载器
+     * @param outcomeUpdater 对应业务的状态写回器
+     */
+    private void executeJudge(
+            String taskLabel,
+            String language,
+            String sourceCode,
+            Supplier<JudgeMaterial> materialLoader,
+            Consumer<JudgeOutcome> outcomeUpdater
+    ) {
+        JudgeOutcome judgeOutcome = new JudgeOutcome();
+        judgeOutcome.setCurStatus(JudgingConstant.WAIT);
         String fileId = null;
 
         try {
-            // 获取语言适配器
-            AbstractLanguageAdapter adapter = findAdapter(submission.getLanguage());
+            // 选择语言适配器，并由调用方提供的数据加载器获取明确的题目和测试数据。
+            AbstractLanguageAdapter adapter = findAdapter(language);
+            JudgeMaterial material = materialLoader.get();
 
-            // 加载问题, 测试数据信息
-            Problem problem = queryProblem(submission.getProblemId());
-            ProblemTestData testData = queryProblemTestData(submission.getProblemId());
-
-            // 根据语言适配获取编译计划
-            CompilePlan compilePlan = adapter.createCompilePlan(submission.getSourceCode());
+            // 根据语言特性编译代码；脚本语言直接构造内联程序。
+            CompilePlan compilePlan = adapter.createCompilePlan(sourceCode);
             ProgramArtifact programArtifact;
-            // 但是有些语言是不需要编译的
-            if(compilePlan.isRequired()){
-                // 更新测评状态 编译
+            if (compilePlan.isRequired()) {
                 judgeOutcome.setCurStatus(JudgingConstant.COMPILE);
-                updateSubmission(taskId, judgeOutcome);
+                outcomeUpdater.accept(judgeOutcome);
 
-                // 更新测评状态 (编译信息/编译错误信息)
                 fileId = compile(compilePlan.getRequestBody(), compilePlan.getCachedArtifactName(), judgeOutcome);
-                updateSubmission(taskId, judgeOutcome);
+                outcomeUpdater.accept(judgeOutcome);
 
                 programArtifact = ProgramArtifact.cached(adapter.activeFileName(), fileId);
-            }else {
-                // 脚本语言无需编译
-                programArtifact = ProgramArtifact.inline(
-                        adapter.activeFileName(),
-                        submission.getSourceCode()
-                );
+            } else {
+                programArtifact = ProgramArtifact.inline(adapter.activeFileName(), sourceCode);
             }
 
-            // 更新测评状态 运行中
+            // 使用同一套运行和输出比较逻辑执行全部测试点。
             judgeOutcome.setCurStatus(JudgingConstant.RUNNING);
-            updateSubmission(taskId, judgeOutcome);
+            outcomeUpdater.accept(judgeOutcome);
 
-            runAllTestCase(adapter, problem, testData, programArtifact, judgeOutcome);
-
-        } catch (CompileErrorException ce){
-            log.info("taskId:{} 编译异常", taskId);
+            runAllTestCase(
+                    adapter,
+                    material.problem(),
+                    material.testData(),
+                    programArtifact,
+                    judgeOutcome
+            );
+        } catch (CompileErrorException exception) {
+            log.info("{} 编译失败", taskLabel);
             judgeOutcome.setCurStatus(JudgingConstant.COMPILE_ERROR);
-            judgeOutcome.setCompilerMsg(ce.getMessage());
-        } catch (RuntimeErrorException re) {
-            log.info("taskId:{} 运行时异常", taskId);
+            judgeOutcome.setCompilerMsg(exception.getMessage());
+        } catch (RuntimeErrorException exception) {
+            log.info("{} 运行时错误", taskLabel);
             judgeOutcome.setCurStatus(JudgingConstant.RUNTIME_ERROR);
-            judgeOutcome.setJudgeMsg(re.getMessage());
-        }catch (TLEException tle) {
-            log.info("taskId{}: 时间超限", taskId);
+            judgeOutcome.setJudgeMsg(exception.getMessage());
+        } catch (TLEException exception) {
+            log.info("{} 时间超限", taskLabel);
             judgeOutcome.setCurStatus(JudgingConstant.TIME_LIMIT_EXCEEDED);
-            judgeOutcome.setJudgeMsg(tle.getMessage());
-        } catch (MLEException mle) {
-            log.info("taskId{}: 内存超限", taskId);
+            judgeOutcome.setJudgeMsg(exception.getMessage());
+        } catch (MLEException exception) {
+            log.info("{} 内存超限", taskLabel);
             judgeOutcome.setCurStatus(JudgingConstant.MEMORY_LIMIT_EXCEEDED);
-            judgeOutcome.setJudgeMsg(mle.getMessage());
-        }catch (WAException wa){
-            log.info("taskId{}: 答案错误", taskId);
+            judgeOutcome.setJudgeMsg(exception.getMessage());
+        } catch (WAException exception) {
+            log.info("{} 答案错误", taskLabel);
             judgeOutcome.setCurStatus(JudgingConstant.WRONG_ANSWER);
-            judgeOutcome.setJudgeMsg(wa.getMessage());
-        }catch (Exception e){
-            log.warn("任务{}: 测评异常, 结束测评", taskId, e);
+            judgeOutcome.setJudgeMsg(exception.getMessage());
+        } catch (Exception exception) {
+            log.warn("{} 发生测评系统异常", taskLabel, exception);
             judgeOutcome.setCurStatus(SystemConstant.SYSTEM_ERROR);
-            judgeOutcome.setJudgeMsg(e.getMessage());
-        }finally {
-            updateSubmission(taskId, judgeOutcome);
-            deleteCacheCompileFile(fileId);
+            judgeOutcome.setJudgeMsg(exception.getMessage());
+        } finally {
+            // 无论成功或失败，都写回各自业务表的终态并清理沙箱编译缓存。
+            try {
+                outcomeUpdater.accept(judgeOutcome);
+            } finally {
+                deleteCacheCompileFile(fileId);
+            }
         }
-
     }
 
+    /**
+     * 写回普通用户提交状态。
+     */
     private void updateSubmission(Long taskId, JudgeOutcome cur){
         submissionMapper.update(
                 Wrappers.<Submission>lambdaUpdate()
@@ -165,11 +259,46 @@ public class JudgeServiceImpl implements JudgeService {
                         .set(cur.getCompilerMsg() != null, Submission::getCompilerMsg, cur.getCompilerMsg())
                         .set(cur.getJudgeMsg() != null, Submission::getJudgeMsg, cur.getJudgeMsg())
                         .set(cur.getScore() != null, Submission::getScore, cur.getScore())
-                        .set(Submission::getJudgeEndTime, LocalDateTime.now())
+                        .set(
+                                isTerminalStatus(cur.getCurStatus()),
+                                Submission::getJudgeEndTime,
+                                LocalDateTime.now()
+                        )
                         .eq(Submission::getId, taskId)
         );
     }
 
+    /**
+     * 写回管理员验题提交状态。
+     */
+    private void updateProblemReviewSubmission(Long taskId, JudgeOutcome cur) {
+        reviewSubmissionMapper.update(
+                Wrappers.<ProblemReviewSubmission>lambdaUpdate()
+                        .set(ProblemReviewSubmission::getStatus, cur.getCurStatus())
+                        .set(cur.getTimeMs() != null, ProblemReviewSubmission::getTimeMs, cur.getTimeMs())
+                        .set(cur.getMemoryKb() != null, ProblemReviewSubmission::getMemoryKb, cur.getMemoryKb())
+                        .set(cur.getCompilerMsg() != null, ProblemReviewSubmission::getCompilerMsg, cur.getCompilerMsg())
+                        .set(cur.getJudgeMsg() != null, ProblemReviewSubmission::getJudgeMsg, cur.getJudgeMsg())
+                        .set(cur.getScore() != null, ProblemReviewSubmission::getScore, cur.getScore())
+                        .set(
+                                isTerminalStatus(cur.getCurStatus()), // 最终结果才更新测评结束时间
+                                ProblemReviewSubmission::getJudgeEndTime,
+                                LocalDateTime.now()
+                        )
+                        .eq(ProblemReviewSubmission::getId, taskId)
+        );
+    }
+
+    /**
+     * 判断是否已经结束测试
+     */
+    private boolean isTerminalStatus(String status) {
+        return TERMINAL_STATUSES.contains(status);
+    }
+
+    /**
+     * 获取提交语言的对应适配器
+     */
     private AbstractLanguageAdapter findAdapter(String language) {
         return languageAdapters.stream()
                 .filter(adapter -> adapter.languageCode().equals(language))
@@ -177,30 +306,60 @@ public class JudgeServiceImpl implements JudgeService {
                 .orElseThrow(() -> new SystemErrorException("暂不支持该语言: " + language));
     }
 
-    private Problem queryProblem(Long problemId){
+    /**
+     * 加载普通用户提交使用的已发布题目和正式测试数据。
+     */
+    private JudgeMaterial loadPublishedMaterial(Long problemId) {
         Problem problem = problemMapper.selectOne(
                 Wrappers.<Problem>lambdaQuery()
                         .eq(Problem::getId, problemId)
-                        .eq(Problem::getStatus, 1)
+                        .eq(Problem::getStatus, ProblemStatus.PUBLISH)
         );
-        if (ObjectUtil.isEmpty(problem)){
-            throw new SystemErrorException("无法加载问题");
+        if (problem == null) {
+            throw new SystemErrorException("无法加载已发布题目");
         }
-        return problem;
-    }
 
-    private ProblemTestData queryProblemTestData(Long problemId){
         ProblemTestData testData = problemTestDataMapper.selectOne(
                 Wrappers.<ProblemTestData>lambdaQuery()
                         .eq(ProblemTestData::getProblemId, problemId)
-                        .eq(ProblemTestData::getActive, 1)
+                        .eq(ProblemTestData::getStatus, ProblemTestDataStatus.READY)
+                        .eq(ProblemTestData::getActive, true)
         );
-        if (ObjectUtil.isEmpty(testData)){
-            throw new SystemErrorException("无法加载问题");
+        if (testData == null) {
+            throw new SystemErrorException("无法加载正式测试数据");
         }
-        return testData;
+        return new JudgeMaterial(problem, testData);
     }
 
+    /**
+     * 加载管理员验题提交固定的待审核题目和测试数据集。
+     */
+    private JudgeMaterial loadProblemReviewMaterial(Long problemId, Long problemTestDataId) {
+        Problem problem = problemMapper.selectOne(
+                Wrappers.<Problem>lambdaQuery()
+                        .eq(Problem::getId, problemId)
+                        .eq(Problem::getStatus, ProblemStatus.PENDING)
+        );
+        if (problem == null) {
+            throw new SystemErrorException("无法加载待审核题目");
+        }
+
+        ProblemTestData testData = problemTestDataMapper.selectOne(
+                Wrappers.<ProblemTestData>lambdaQuery()
+                        .eq(ProblemTestData::getId, problemTestDataId)
+                        .eq(ProblemTestData::getProblemId, problemId)
+                        .eq(ProblemTestData::getActive, false)
+                        .eq(ProblemTestData::getStatus, ProblemTestDataStatus.EXTRACTED)
+        );
+        if (testData == null) {
+            throw new SystemErrorException("无法加载待审核测试数据");
+        }
+        return new JudgeMaterial(problem, testData);
+    }
+
+    /**
+     * 编译
+     */
     private String compile(JSONObject request, String cachedArtifactName, JudgeOutcome cur){
 
         JSONArray response;
@@ -250,6 +409,9 @@ public class JudgeServiceImpl implements JudgeService {
         return result.getJSONObject("fileIds").getString(cachedArtifactName);
     }
 
+    /**
+     * 运行代码
+     */
     private void runAllTestCase(
             AbstractLanguageAdapter adapter,
             Problem problem,
@@ -257,18 +419,18 @@ public class JudgeServiceImpl implements JudgeService {
             ProgramArtifact programArtifact,
             JudgeOutcome cur
     ) {
-        if(problemTestData.getTestNodeCount().equals(0)){
-            // 一般这是正常上传逻辑的话, 不可能会出现这个问题的
+        if(problemTestData.getTestNodeCount() == null || problemTestData.getTestNodeCount() <= 0){
             throw new SystemErrorException("测试数据异常: 测试点为空");
         }
 
+        Path testDataDirectory = Path.of(dataRoot, problemTestData.getStoragePath());
         long maxTimeNs = 0L;
         long maxMemoryBytes = 0L;
         for(int testIndex = 1; testIndex <= problemTestData.getTestNodeCount(); testIndex++){
 
-            // 加载测试输出输出数据, 保证标准输入和标准输出完整性, 否则抛出系统异常
-            String inputData = loadTestData(problem.getId(), testIndex, "input");
-            String outputData = loadTestData(problem.getId(), testIndex, "output");
+            // 从当前数据集的 storagePath 加载输入和标准输出，staging 与正式目录共用该逻辑。
+            String inputData = loadTestData(testDataDirectory, testIndex, "input");
+            String outputData = loadTestData(testDataDirectory, testIndex, "output");
 
             RunContext runContext = RunContext.builder()
                     .input(inputData)
@@ -279,7 +441,7 @@ public class JudgeServiceImpl implements JudgeService {
             // 构造运行请求请求体
             JSONObject request = adapter.createRunRequest(runContext);
 
-            // 运行测试样例, 如果下面这个方法抛异常的话当前runAllTestCase方法会继续往上抛吗?
+            // 此处异常会继续向上传播，并由 judge 方法统一映射为提交终态。
             JSONObject result = runOneTestCase(request);
 
             String status = result.getString("status");
@@ -299,7 +461,7 @@ public class JudgeServiceImpl implements JudgeService {
                 throw new MLEException(status);
             }
 
-            if(!SandBoxStatus.ACCEPTED.equals(status) || !exitStatus.equals(0)){
+            if(!SandBoxStatus.ACCEPTED.equals(status) || !Integer.valueOf(0).equals(exitStatus)){
                 throw new RuntimeException(stderr);
             }
 
@@ -322,23 +484,23 @@ public class JudgeServiceImpl implements JudgeService {
         cur.setCurStatus(JudgingConstant.ACCEPTED);
     }
 
-    private String loadTestData(Long problemId, Integer testIndex, String inputOrOutput) {
-        Path inputPath = Path.of(String.format(
-                "%s\\p%s\\test%s\\%s.txt",
-                judgeProperties.getDataRoot(),
-                problemId,
-                testIndex,
-                inputOrOutput
-        ));
-        String data;
+    /**
+     * 读取一个测试点的输入或标准输出文件。
+     */
+    private String loadTestData(Path testDataDirectory, Integer testIndex, String inputOrOutput) {
+        Path dataPath = testDataDirectory
+                .resolve("test" + testIndex)
+                .resolve(inputOrOutput + ".txt");
         try {
-            data  = Files.readString(inputPath);
+            return Files.readString(dataPath);
         } catch (IOException e) {
             throw new SystemErrorException("系统异常, 测试数据不完整");
         }
-        return data;
     }
 
+    /**
+     * 运行单个测试点
+     */
     private JSONObject runOneTestCase(JSONObject request){
         JSONObject result;
         try {
@@ -352,18 +514,27 @@ public class JudgeServiceImpl implements JudgeService {
         return result;
     }
 
+    /**
+     * 比较输入输出
+     */
     private boolean matchStdOutput(String stdOutput, String realOutput){
         stdOutput = normalText(stdOutput);
         realOutput = normalText(realOutput);
         return stdOutput.equals(realOutput);
     }
 
+    /**
+     * 规范化输入输出
+     */
     private String normalText(String text){
         return text
                 .replace("\r\n", "\n")
                 .stripTrailing();
     }
 
+    /**
+     * 删除沙箱编译缓存文件
+     */
     private void deleteCacheCompileFile(String fileId){
         if(fileId == null){
             return;

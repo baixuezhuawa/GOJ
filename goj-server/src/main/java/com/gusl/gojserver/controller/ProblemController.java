@@ -2,11 +2,18 @@ package com.gusl.gojserver.controller;
 
 import com.gusl.common.common.BaseController;
 import com.gusl.common.common.Result;
+import com.gusl.gojserver.pojo.dto.ProblemDraftDto;
 import com.gusl.gojserver.pojo.dto.ProblemPageListDto;
+import com.gusl.gojserver.pojo.dto.UpdateProblemDraftDto;
+import com.gusl.gojserver.pojo.entity.LoginUser;
+import com.gusl.gojserver.pojo.vo.ProblemDraftInfoVo;
 import com.gusl.gojserver.pojo.vo.ProblemPageListVo;
 import com.gusl.gojserver.service.ProblemService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.apache.ibatis.annotations.Delete;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,19 +26,45 @@ public class ProblemController extends BaseController {
 
     private final ProblemService problemService;
 
-    /**
-     * 获取题目列表/筛选题目
-     * @param dto 路径参数, 筛选条件
-     * @return 简略题目列表
-     */
+
+    @Operation(summary = "题目列表")
     @GetMapping("/list")
     public Result problemList(@ModelAttribute ProblemPageListDto dto){
         List<ProblemPageListVo> records = problemService.getProblemList(dto);
         return success("操作成功", records);
     }
 
+    @Operation(summary = "题目详情")
     @GetMapping("/{problemId}")
     public Result getProblemById(@PathVariable("problemId") Long id){
         return success("操作成功", problemService.getProblemInfoById(id));
+    }
+
+    @Operation(summary = "获取已上传题目列表")
+    @GetMapping("/upload-list")
+    public Result getUploadProblemList(@AuthenticationPrincipal LoginUser loginUser){
+        List<ProblemDraftInfoVo> list = problemService.getUploadProblemList(loginUser);
+        return success("操作成功", list);
+    }
+
+    // 只能修改草稿阶段的问题,
+    @Operation(summary = "编辑草稿阶段的问题")
+    @PostMapping("/update-myProblem-draft")
+    public Result updateMyProblem(
+            @RequestBody UpdateProblemDraftDto updateproblemDraftDto,
+            @AuthenticationPrincipal LoginUser loginUser
+    ){
+        problemService.updateMyProblemDraft(updateproblemDraftDto, loginUser);
+        return success();
+    }
+
+    @Operation(summary = "删除我的草稿问题")
+    @DeleteMapping("/{problemId}")
+    public Result deleteMyProblem(
+            @PathVariable Long problemId,
+            @AuthenticationPrincipal LoginUser loginUser
+    ){
+        problemService.deleteMyProblemDraft(problemId, loginUser);
+        return success();
     }
 }
