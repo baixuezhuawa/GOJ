@@ -1,5 +1,7 @@
 package com.gusl.gojserver.config.properties;
 
+import com.gusl.gojserver.config.properties.entity.PaginationProperties;
+import com.gusl.gojserver.config.properties.entity.ProfileProperties;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -7,7 +9,11 @@ import org.springframework.stereotype.Component;
 @Data
 @Component
 @ConfigurationProperties(prefix = "goj")
-public class JudgeProperties {
+public class SysProperties {
 
     private String dataRoot;
+
+    private ProfileProperties profile;
+
+    private PaginationProperties pagination;
 }

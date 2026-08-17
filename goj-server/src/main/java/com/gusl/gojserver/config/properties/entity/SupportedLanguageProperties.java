@@ -1,4 +1,4 @@
-package com.gusl.gojserver.config.properties;
+package com.gusl.gojserver.config.properties.entity;
 
 import lombok.Data;
 

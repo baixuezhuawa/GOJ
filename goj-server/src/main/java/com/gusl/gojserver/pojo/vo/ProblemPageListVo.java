@@ -1,6 +1,5 @@
 package com.gusl.gojserver.pojo.vo;
 
-import com.gusl.gojserver.pojo.entity.Tag;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -22,7 +21,7 @@ public class ProblemPageListVo {
     @Schema(description = "标签集合")
     private List<String> tags;
 
-    @Schema(description = "是否解决")
-    private boolean solveByMe;
+    @Schema(description = "未尝试 尝试过 通过")
+    private String status;
 
 }

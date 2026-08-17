@@ -9,8 +9,7 @@ import com.gusl.common.constant.ProblemStatus;
 import com.gusl.common.constant.ProblemTestDataStatus;
 import com.gusl.common.pojo.entity.Problem;
 import com.gusl.common.pojo.entity.ProblemTestData;
-import com.gusl.common.utils.StringUtils;
-import com.gusl.gojserver.config.properties.JudgeProperties;
+import com.gusl.gojserver.config.properties.SysProperties;
 import com.gusl.gojserver.mapper.ProblemMapper;
 import com.gusl.gojserver.mapper.ProblemTestDataMapper;
 import com.gusl.gojserver.pojo.entity.LoginUser;
@@ -18,11 +17,9 @@ import com.gusl.gojserver.service.ProblemTestDataService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
-import java.net.BindException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -32,7 +29,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
@@ -47,7 +43,7 @@ public class ProblemTestDataServiceImpl extends ServiceImpl<ProblemTestDataMappe
 
     private final ProblemTestDataMapper problemTestDataMapper;
 
-    private final JudgeProperties judgeProperties;
+    private final SysProperties sysProperties;
 
 
     /** 上传测试数据 */
@@ -277,7 +273,7 @@ public class ProblemTestDataServiceImpl extends ServiceImpl<ProblemTestDataMappe
 
 
     private Path dataRoot() {
-        return Path.of(judgeProperties.getDataRoot()).toAbsolutePath().normalize();
+        return Path.of(sysProperties.getDataRoot()).toAbsolutePath().normalize();
     }
 
     /**

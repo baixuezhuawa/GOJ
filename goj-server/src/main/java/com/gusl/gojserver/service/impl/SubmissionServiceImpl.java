@@ -1,25 +1,33 @@
 package com.gusl.gojserver.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.gusl.common.common.BaseException;
+import com.gusl.common.common.PageResult;
 import com.gusl.common.constant.JudgeQueueConstant;
 import com.gusl.common.constant.JudgingConstant;
 import com.gusl.common.constant.ProblemStatus;
 import com.gusl.common.constant.ProblemTestDataStatus;
 import com.gusl.common.pojo.entity.Problem;
 import com.gusl.common.pojo.entity.ProblemTestData;
+import com.gusl.common.utils.StringUtils;
+import com.gusl.gojserver.config.properties.SysProperties;
 import com.gusl.gojserver.mapper.ProblemMapper;
 import com.gusl.gojserver.mapper.ProblemTestDataMapper;
 import com.gusl.gojserver.mapper.SubmissionMapper;
 import com.gusl.gojserver.mapper.UserMapper;
-import com.gusl.gojserver.pojo.dto.SubmissionDto;
+import com.gusl.gojserver.pojo.dto.Submission2JudgeDto;
+import com.gusl.gojserver.pojo.dto.SubmissionSearchDto;
 import com.gusl.gojserver.pojo.entity.LoginUser;
 import com.gusl.common.pojo.entity.Submission;
-import com.gusl.gojserver.pojo.vo.SubmissionVo;
+import com.gusl.gojserver.pojo.vo.SubmissionDetailVo;
+import com.gusl.gojserver.pojo.vo.SubmissionListVo;
 import com.gusl.gojserver.service.SubmissionService;
 import com.gusl.gojserver.service.support.JudgeSourceValidator;
+import com.gusl.gojserver.service.support.PageFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -44,26 +52,27 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
 
     private final JudgeSourceValidator judgeSourceValidator;
 
-    /**
-     * 将用户的提交, 提交到测评机
-     * @param submissionDto 提交信息
-     */
+    private final SysProperties sysProperties;
+
+    private final PageFactory pageFactory;
+
+    /** 将用户的提交, 提交到测评机 */
     @Override
-    public Long submitProblemToJudge(SubmissionDto submissionDto, LoginUser loginUser) {
-        requirePublishedProblem(submissionDto.getProblemId());
-        requirePublishedTestData(submissionDto.getProblemId());
+    public Long submitProblemToJudge(Submission2JudgeDto submission2JudgeDto, LoginUser loginUser) {
+        requirePublishedProblem(submission2JudgeDto.getProblemId());
+        requirePublishedTestData(submission2JudgeDto.getProblemId());
         String sha256 = judgeSourceValidator.validateAndHash(
-                submissionDto.getLanguage(),
-                submissionDto.getSourceCode()
+                submission2JudgeDto.getLanguage(),
+                submission2JudgeDto.getSourceCode()
         );
-        requireNoRecentDuplicate(submissionDto, loginUser.getUserId(), sha256);
-        Submission submission = BeanUtil.copyProperties(submissionDto, Submission.class);
+        requireNoRecentDuplicate(submission2JudgeDto, loginUser.getUserId(), sha256);
+        Submission submission = BeanUtil.copyProperties(submission2JudgeDto, Submission.class);
         return enqueueSubmission(submission, loginUser.getUserId(), sha256);
     }
 
-    /**
-     * 保存提交并将 submissionId 放入 Judge 队列。
-     */
+
+
+    /** 保存提交并将 submissionId 放入 Judge 队列。 */
     private Long enqueueSubmission(Submission submission, Long userId, String sha256) {
         submission.setStatus(JudgingConstant.IN_QUEUE);
         submission.setUserId(userId);
@@ -85,35 +94,95 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
         return submission.getId();
     }
 
+
+
+    /** 查询提交详情 */
     @Override
-    public SubmissionVo getSubmissionById(Long submissionId) {
-        SubmissionVo vo = new SubmissionVo();
+    public SubmissionDetailVo getSubmissionById(Long submissionId) {
         Submission submission = getById(submissionId);
+        if (submission == null) {
+            throw new BaseException("提交不存在");
+        }
+
+        SubmissionDetailVo vo = new SubmissionDetailVo();
         BeanUtil.copyProperties(submission, vo);
         vo.setUsername(userMapper.selectById(submission.getUserId()).getUsername());
         return vo;
     }
 
-    /**
-     * 拒绝用户在两分钟内重复提交相同代码。
-     */
-    private void requireNoRecentDuplicate(SubmissionDto dto, Long userId, String sha256) {
+
+
+    /** 获取我的提交 */
+    @Override
+    public PageResult<SubmissionListVo> getMySubmissionList(LoginUser loginUser, SubmissionSearchDto condition) {
+
+        Page<Submission> page = pageFactory.create(condition);
+
+        Page<Submission> submissions = submissionMapper.selectPage(
+                page,
+                Wrappers.<Submission>lambdaQuery()
+                        .eq(Submission::getUserId, loginUser.getUserId())
+                        .eq(condition.getProblemId() != null,
+                                Submission::getProblemId,
+                                condition.getProblemId())
+                        .eq(StringUtils.isNotEmpty(condition.getLanguage()),
+                                Submission::getLanguage,
+                                condition.getLanguage())
+                        .eq(StringUtils.isNotEmpty(condition.getStatus()),
+                                Submission::getStatus,
+                                condition.getStatus())
+                        .orderByDesc(Submission::getId)
+        );
+
+        // 将实体分页数据转换为 VO 分页数据
+        IPage<SubmissionListVo> voPage = submissions.convert(submission ->
+                        BeanUtil.copyProperties(
+                                submission,
+                                SubmissionListVo.class
+                        )
+                );
+        return PageResult.of(voPage);
+    }
+
+    /** 获取最近几次提交 */
+    @Override
+    public PageResult<SubmissionListVo> getMyRecentSubmission(LoginUser loginUser) {
+        Page<Submission> submissionPage = submissionMapper.selectPage(
+                new Page<>(1, sysProperties.getProfile().getRecentSubmissionSize(), false),
+                Wrappers.<Submission>lambdaQuery()
+                        .eq(Submission::getUserId, loginUser.getUserId())
+                        .orderByDesc(Submission::getId)
+        );
+        IPage<SubmissionListVo> res = submissionPage.convert(s ->
+                BeanUtil.copyProperties(s, SubmissionListVo.class)
+        );
+        return PageResult.of(res);
+    }
+
+
+    /** 拒绝重复提交相同代码的频率 */
+    private void requireNoRecentDuplicate(Submission2JudgeDto dto, Long userId, String sha256) {
         Long count = submissionMapper.selectCount(
                 Wrappers.<Submission>lambdaQuery()
                         .eq(Submission::getProblemId, dto.getProblemId())
                         .eq(Submission::getSourceSha256, sha256)
                         .eq(Submission::getUserId, userId)
                         .eq(Submission::getLanguage, dto.getLanguage())
-                        .ge(Submission::getSubmissionTime, LocalDateTime.now().minusMinutes(2))
+                        .ge(Submission::getSubmissionTime,
+                                LocalDateTime.now().minusMinutes(
+                                        sysProperties.getProfile()
+                                                .getFrequencyOfRepeatedSubmissions()
+                                )
+                        )
         );
         if(count > 0){
-            throw new BaseException("近两分钟内有重复提交");
+            throw new BaseException("重复提交相同代码频率过高");
         }
     }
 
-    /**
-     * 校验普通提交对应的题目已经发布。
-     */
+
+
+    /** 校验普通提交对应的题目已经发布。*/
     private void requirePublishedProblem(Long problemId) {
         if (problemId == null) {
             throw new BaseException("题目 id 不能为空");
@@ -130,9 +199,9 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
         }
     }
 
-    /**
-     * 普通提交只能使用已发布并激活的正式测试数据。
-     */
+
+
+    /** 普通提交只能使用已发布并激活的正式测试数据。 */
     private void requirePublishedTestData(Long problemId) {
         Long count = problemTestDataMapper.selectCount(
                 Wrappers.<ProblemTestData>lambdaQuery()

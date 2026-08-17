@@ -5,7 +5,7 @@ import lombok.Data;
 
 @Schema(name = "提交Dto")
 @Data
-public class SubmissionDto {
+public class Submission2JudgeDto {
 
     @Schema(description = "题目id", example = "1")
     private Long problemId;

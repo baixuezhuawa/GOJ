@@ -21,6 +21,7 @@ import com.gusl.gojjudge.mapper.ProblemTestDataMapper;
 import com.gusl.gojjudge.mapper.SubmissionMapper;
 import com.gusl.gojjudge.pojo.entity.*;
 import com.gusl.gojjudge.sercice.JudgeService;
+import com.gusl.gojjudge.sercice.SubmissionResultService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -47,7 +48,9 @@ import java.util.function.Supplier;
 @RequiredArgsConstructor
 public class JudgeServiceImpl implements JudgeService {
 
-    /** 终态集合，用于判断何时写入测评结束时间。 */
+    /**
+     * 终态集合，用于判断何时写入测评结束时间。
+     */
     private static final Set<String> TERMINAL_STATUSES = Set.of(
             JudgingConstant.COMPILE_ERROR,
             JudgingConstant.WRONG_ANSWER,
@@ -61,27 +64,44 @@ public class JudgeServiceImpl implements JudgeService {
     @Value("${goj.judge.data-root}")
     private String dataRoot;
 
-    /** 公共测评流程所需的题目和测试数据。*/
-    private record JudgeMaterial(Problem problem, ProblemTestData testData) { }
+    /**
+     * 公共测评流程所需的题目和测试数据。
+     */
+    private record JudgeMaterial(Problem problem, ProblemTestData testData) {
+    }
 
-    /** 提交记录 Mapper，用于读取源码并更新测评状态和结果。 */
+    /**
+     * 提交记录 Mapper，用于读取源码并更新测评状态和结果。
+     */
     private final SubmissionMapper submissionMapper;
 
-    /** 管理员验题提交 Mapper，用于读取验题源码并写回独立测评结果。 */
+    /**
+     * 管理员验题提交 Mapper，用于读取验题源码并写回独立测评结果。
+     */
     private final ProblemReviewSubmissionMapper reviewSubmissionMapper;
 
-    /** 题目 Mapper，用于读取运行时的时间和内存限制。 */
+    /**
+     * 题目 Mapper，用于读取运行时的时间和内存限制。
+     */
     private final ProblemMapper problemMapper;
 
-    /** 测试数据 Mapper，用于读取题目的测试点数量。 */
+    /**
+     * 测试数据 Mapper，用于读取题目的测试点数量。
+     */
     private final ProblemTestDataMapper problemTestDataMapper;
 
-    /** go-judge HTTP 客户端；所有编译和运行请求都通过它进入沙箱。 */
+    /**
+     * go-judge HTTP 客户端；所有编译和运行请求都通过它进入沙箱。
+     */
     private final GoJudgeClient goJudgeClient;
 
-    /** Spring 会自动注入所有 AbstractGoJudgeLanguageAdapter 的实现 Bean。 */
+    /**
+     * Spring 会自动注入所有 AbstractGoJudgeLanguageAdapter 的实现 Bean。
+     */
     private final List<AbstractLanguageAdapter> languageAdapters;
 
+    /** 普通提交结果写回服务，负责终态幂等更新和派生统计维护。 */
+    private final SubmissionResultService submissionResultService;
 
 
     /**
@@ -89,7 +109,7 @@ public class JudgeServiceImpl implements JudgeService {
      */
     @Override
     public void judgeSubmission(Long submissionId) {
-        // 第一步：仅允许一个 Worker 把任务从排队状态推进到等待状态。
+        // 仅允许一个 Worker 把任务从排队状态推进到等待状态。
         int affectedRows = submissionMapper.update(
                 Wrappers.<Submission>lambdaUpdate()
                         .set(Submission::getStatus, JudgingConstant.WAIT)
@@ -102,7 +122,7 @@ public class JudgeServiceImpl implements JudgeService {
             return;
         }
 
-        // 第二步：普通提交只从 submission 表读取，并固定加载已发布题目和正式测试数据。
+        // 普通提交只从 submission 表读取，并固定加载已发布题目和正式测试数据。
         Submission submission = submissionMapper.selectOne(
                 Wrappers.<Submission>lambdaQuery()
                         .eq(Submission::getId, submissionId)
@@ -113,13 +133,13 @@ public class JudgeServiceImpl implements JudgeService {
             return;
         }
 
-        // 第三步：把明确的普通提交数据交给公共测评流程。
+        // 把明确的普通提交数据交给公共测评流程。
         executeJudge(
                 "普通提交 " + submissionId,
                 submission.getLanguage(),
                 submission.getSourceCode(),
                 () -> loadPublishedMaterial(submission.getProblemId()),
-                outcome -> updateSubmission(submissionId, outcome)
+                outcome -> submissionResultService.updateSubmission(submission, outcome)
         );
     }
 
@@ -128,7 +148,7 @@ public class JudgeServiceImpl implements JudgeService {
      */
     @Override
     public void judgeProblemReview(Long reviewSubmissionId) {
-        // 第一步：验题任务只在 problem_review_submission 表中领取。
+        // 验题任务只在 problem_review_submission 表中领取。
         int affectedRows = reviewSubmissionMapper.update(
                 Wrappers.<ProblemReviewSubmission>lambdaUpdate()
                         .set(ProblemReviewSubmission::getStatus, JudgingConstant.WAIT)
@@ -141,7 +161,7 @@ public class JudgeServiceImpl implements JudgeService {
             return;
         }
 
-        // 第二步：验题任务只从独立验题表读取，并使用创建任务时固定的测试数据集 id。
+        // 验题任务只从独立验题表读取，并使用创建任务时固定的测试数据集 id。
         ProblemReviewSubmission submission = reviewSubmissionMapper.selectOne(
                 Wrappers.<ProblemReviewSubmission>lambdaQuery()
                         .eq(ProblemReviewSubmission::getId, reviewSubmissionId)
@@ -152,7 +172,7 @@ public class JudgeServiceImpl implements JudgeService {
             return;
         }
 
-        // 第三步：把明确的验题数据交给同一个公共测评流程。
+        // 把明确的验题数据交给同一个公共测评流程。
         executeJudge(
                 "管理员验题提交 " + reviewSubmissionId,
                 submission.getLanguage(),
@@ -165,9 +185,9 @@ public class JudgeServiceImpl implements JudgeService {
     /**
      * 执行两类任务共用的编译、运行、结果比较和异常映射流程。
      *
-     * @param taskLabel 日志中的任务标识
-     * @param language 语言编码
-     * @param sourceCode 源代码
+     * @param taskLabel      日志中的任务标识
+     * @param language       语言编码
+     * @param sourceCode     源代码
      * @param materialLoader 对应业务的数据加载器
      * @param outcomeUpdater 对应业务的状态写回器
      */
@@ -245,27 +265,6 @@ public class JudgeServiceImpl implements JudgeService {
                 deleteCacheCompileFile(fileId);
             }
         }
-    }
-
-    /**
-     * 写回普通用户提交状态。
-     */
-    private void updateSubmission(Long taskId, JudgeOutcome cur){
-        submissionMapper.update(
-                Wrappers.<Submission>lambdaUpdate()
-                        .set(Submission::getStatus, cur.getCurStatus())
-                        .set(cur.getTimeMs() != null, Submission::getTimeMs, cur.getTimeMs())
-                        .set(cur.getMemoryKb() != null, Submission::getMemoryKb, cur.getMemoryKb())
-                        .set(cur.getCompilerMsg() != null, Submission::getCompilerMsg, cur.getCompilerMsg())
-                        .set(cur.getJudgeMsg() != null, Submission::getJudgeMsg, cur.getJudgeMsg())
-                        .set(cur.getScore() != null, Submission::getScore, cur.getScore())
-                        .set(
-                                isTerminalStatus(cur.getCurStatus()),
-                                Submission::getJudgeEndTime,
-                                LocalDateTime.now()
-                        )
-                        .eq(Submission::getId, taskId)
-        );
     }
 
     /**
@@ -360,7 +359,7 @@ public class JudgeServiceImpl implements JudgeService {
     /**
      * 编译
      */
-    private String compile(JSONObject request, String cachedArtifactName, JudgeOutcome cur){
+    private String compile(JSONObject request, String cachedArtifactName, JudgeOutcome cur) {
 
         JSONArray response;
 
@@ -371,7 +370,7 @@ public class JudgeServiceImpl implements JudgeService {
             throw new SystemErrorException("系统异常, 编译失败");
         }
 
-        if(response == null || response.isEmpty()){
+        if (response == null || response.isEmpty()) {
             cur.setCompilerMsg("系统异常, 编译失败");
             throw new SystemErrorException("系统异常, 编译失败");
         }
@@ -386,23 +385,23 @@ public class JudgeServiceImpl implements JudgeService {
         String stderr = files.getString("stderr");
 
 
-        if(SandBoxStatus.INTERNAL_ERROR.equals(staus) || SandBoxStatus.FILE_ERROR.equals(staus)){
+        if (SandBoxStatus.INTERNAL_ERROR.equals(staus) || SandBoxStatus.FILE_ERROR.equals(staus)) {
             // TODO 需要上报管理员, 后续添加错误信息收集, 或者通过日志管理系统获取(需要重测)
             throw new SystemErrorException(staus);
         }
-        if(
+        if (
                 SandBoxStatus.TIME_LIMIT_EXCEEDED.equals(staus) ||
-                SandBoxStatus.SIGNALLED.equals(staus) ||
-                SandBoxStatus.NONZERO_EXIT_STATUS.equals(staus) ||
-                SandBoxStatus.MEMORY_LIMIT_EXCEEDED.equals(staus)
-        ){
+                        SandBoxStatus.SIGNALLED.equals(staus) ||
+                        SandBoxStatus.NONZERO_EXIT_STATUS.equals(staus) ||
+                        SandBoxStatus.MEMORY_LIMIT_EXCEEDED.equals(staus)
+        ) {
             throw new CompileErrorException(staus);
         }
 
         String compileMsg = String.format("stdout:\n%s\nstderr:\n%s", stdout, stderr);
 
         // 最后一层保险
-        if(!SandBoxStatus.ACCEPTED.equals(staus) || exitStatus != 0){
+        if (!SandBoxStatus.ACCEPTED.equals(staus) || exitStatus != 0) {
             throw new CompileErrorException(compileMsg);
         }
         cur.setCompilerMsg(compileMsg);
@@ -419,14 +418,14 @@ public class JudgeServiceImpl implements JudgeService {
             ProgramArtifact programArtifact,
             JudgeOutcome cur
     ) {
-        if(problemTestData.getTestNodeCount() == null || problemTestData.getTestNodeCount() <= 0){
+        if (problemTestData.getTestNodeCount() == null || problemTestData.getTestNodeCount() <= 0) {
             throw new SystemErrorException("测试数据异常: 测试点为空");
         }
 
         Path testDataDirectory = Path.of(dataRoot, problemTestData.getStoragePath());
         long maxTimeNs = 0L;
         long maxMemoryBytes = 0L;
-        for(int testIndex = 1; testIndex <= problemTestData.getTestNodeCount(); testIndex++){
+        for (int testIndex = 1; testIndex <= problemTestData.getTestNodeCount(); testIndex++) {
 
             // 从当前数据集的 storagePath 加载输入和标准输出，staging 与正式目录共用该逻辑。
             String inputData = loadTestData(testDataDirectory, testIndex, "input");
@@ -451,17 +450,17 @@ public class JudgeServiceImpl implements JudgeService {
             String realOutput = files.getString("stdout");
             String stderr = files.getString("stderr");
 
-            if(SandBoxStatus.SIGNALLED.equals(status) || SandBoxStatus.NONZERO_EXIT_STATUS.equals(status)){
+            if (SandBoxStatus.SIGNALLED.equals(status) || SandBoxStatus.NONZERO_EXIT_STATUS.equals(status)) {
                 throw new RuntimeErrorException(status + ": " + stderr);
             }
-            if(SandBoxStatus.TIME_LIMIT_EXCEEDED.equals(status)){
+            if (SandBoxStatus.TIME_LIMIT_EXCEEDED.equals(status)) {
                 throw new TLEException(status);
             }
-            if(SandBoxStatus.MEMORY_LIMIT_EXCEEDED.equals(status)){
+            if (SandBoxStatus.MEMORY_LIMIT_EXCEEDED.equals(status)) {
                 throw new MLEException(status);
             }
 
-            if(!SandBoxStatus.ACCEPTED.equals(status) || !Integer.valueOf(0).equals(exitStatus)){
+            if (!SandBoxStatus.ACCEPTED.equals(status) || !Integer.valueOf(0).equals(exitStatus)) {
                 throw new RuntimeException(stderr);
             }
 
@@ -476,7 +475,7 @@ public class JudgeServiceImpl implements JudgeService {
             boolean accepted = matchStdOutput(outputData, realOutput);
 
             // 目前如果不通过就先结束测评, 后续 IO模式 才考虑 score 的计算, 现在留着拓展空间.
-            if(!accepted){
+            if (!accepted) {
                 throw new WAException("wrong answer one test" + testIndex);
             }
         }
@@ -501,7 +500,7 @@ public class JudgeServiceImpl implements JudgeService {
     /**
      * 运行单个测试点
      */
-    private JSONObject runOneTestCase(JSONObject request){
+    private JSONObject runOneTestCase(JSONObject request) {
         JSONObject result;
         try {
             JSONArray response = goJudgeClient.run(request);
@@ -517,7 +516,7 @@ public class JudgeServiceImpl implements JudgeService {
     /**
      * 比较输入输出
      */
-    private boolean matchStdOutput(String stdOutput, String realOutput){
+    private boolean matchStdOutput(String stdOutput, String realOutput) {
         stdOutput = normalText(stdOutput);
         realOutput = normalText(realOutput);
         return stdOutput.equals(realOutput);
@@ -526,7 +525,7 @@ public class JudgeServiceImpl implements JudgeService {
     /**
      * 规范化输入输出
      */
-    private String normalText(String text){
+    private String normalText(String text) {
         return text
                 .replace("\r\n", "\n")
                 .stripTrailing();
@@ -535,8 +534,8 @@ public class JudgeServiceImpl implements JudgeService {
     /**
      * 删除沙箱编译缓存文件
      */
-    private void deleteCacheCompileFile(String fileId){
-        if(fileId == null){
+    private void deleteCacheCompileFile(String fileId) {
+        if (fileId == null) {
             return;
         }
         try {

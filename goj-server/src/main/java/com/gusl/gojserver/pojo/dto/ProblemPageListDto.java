@@ -1,18 +1,16 @@
 package com.gusl.gojserver.pojo.dto;
 
+import com.gusl.common.common.PageQuery;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 import java.util.List;
 
-@Schema(name = "分页查询", description = "问题分页查询, 条件分页查询") @Data
-public class ProblemPageListDto {
-
-    @Schema(description = "页码")
-    private Integer page;
-
-    @Schema(description = "每页大小")
-    private Integer size;
+@EqualsAndHashCode(callSuper = true)
+@Schema(name = "分页查询", description = "问题分页查询, 条件分页查询")
+@Data
+public class ProblemPageListDto extends PageQuery {
 
     @Schema(description = "题目名/题号")
     private String keyword;
@@ -26,6 +24,6 @@ public class ProblemPageListDto {
     @Schema(description = "标签")
     private List<Long> tagId;
 
-    @Schema(description = "")
-    private boolean unsolved;
+    @Schema(description = "尝试, 未尝试, 通过")
+    private String solveStatus;
 }

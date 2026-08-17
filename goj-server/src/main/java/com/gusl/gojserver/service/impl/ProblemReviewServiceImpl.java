@@ -2,12 +2,15 @@ package com.gusl.gojserver.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.gusl.common.common.BaseException;
+import com.gusl.common.common.PageQuery;
+import com.gusl.common.common.PageResult;
 import com.gusl.common.constant.ProblemStatus;
 import com.gusl.common.constant.ProblemTestDataStatus;
 import com.gusl.common.pojo.entity.Problem;
 import com.gusl.common.pojo.entity.ProblemTestData;
-import com.gusl.gojserver.config.properties.JudgeProperties;
+import com.gusl.gojserver.config.properties.SysProperties;
 import com.gusl.gojserver.mapper.ProblemMapper;
 import com.gusl.gojserver.mapper.ProblemTestDataMapper;
 import com.gusl.gojserver.mapper.TagMapper;
@@ -18,6 +21,7 @@ import com.gusl.gojserver.pojo.vo.AdminProblemReviewListVo;
 import com.gusl.gojserver.pojo.vo.ProblemTestDataReviewVo;
 import com.gusl.gojserver.service.ProblemReviewService;
 import com.gusl.gojserver.service.ProblemTestDataService;
+import com.gusl.gojserver.service.support.PageFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -41,26 +45,22 @@ import java.util.concurrent.atomic.AtomicReference;
 @RequiredArgsConstructor
 public class ProblemReviewServiceImpl implements ProblemReviewService {
 
-    private static final int DEFAULT_PAGE_SIZE = 10;
-    private static final int MAX_PAGE_SIZE = 100;
-
     private final ProblemMapper problemMapper;
     private final ProblemTestDataMapper problemTestDataMapper;
     private final UserMapper userMapper;
     private final TagMapper tagMapper;
-    private final JudgeProperties judgeProperties;
+    private final SysProperties sysProperties;
     private final TransactionTemplate transactionTemplate;
     private final ProblemTestDataService problemTestDataService;
+    private final PageFactory pageFactory;
 
     /**
      * 分页获取待审核题目。
      */
     @Override
-    public List<AdminProblemReviewListVo> getPendingReviews(Integer page, Integer size) {
-        int currentPage = page == null || page < 1 ? 1 : page;
-        int pageSize = size == null || size < 1 ? DEFAULT_PAGE_SIZE : Math.min(size, MAX_PAGE_SIZE);
-        long offset = (long) (currentPage - 1) * pageSize;
-        return problemMapper.selectPendingReviews(offset, pageSize, ProblemStatus.PENDING);
+    public PageResult<AdminProblemReviewListVo> getPendingReviews(PageQuery query) {
+        Page<AdminProblemReviewListVo> page = pageFactory.create(query);
+        return PageResult.of(problemMapper.selectPendingReviews(page, ProblemStatus.PENDING));
     }
 
     /**
@@ -97,7 +97,7 @@ public class ProblemReviewServiceImpl implements ProblemReviewService {
                 ProblemTestData testData = requirePendingTestData(problemId, true);
                 int version = problemTestDataService.nextVersion(problemId);
 
-                Path source = Path.of(judgeProperties.getDataRoot(), testData.getStoragePath());
+                Path source = Path.of(sysProperties.getDataRoot(), testData.getStoragePath());
 
                 Path destination = resolveOfficialDataRoot()
                         .resolve("p" + problemId)
@@ -181,6 +181,7 @@ public class ProblemReviewServiceImpl implements ProblemReviewService {
         log.info("题目 {} 审核未通过", problemId);
     }
 
+
     /**
      * 查询待审核题目；审核写操作会增加行锁，避免两个管理员同时处理同一题目。
      */
@@ -201,6 +202,7 @@ public class ProblemReviewServiceImpl implements ProblemReviewService {
         }
         return problem;
     }
+
 
     /**
      * 获取最近一次已完成解压校验、但尚未激活的测试数据。
@@ -239,6 +241,8 @@ public class ProblemReviewServiceImpl implements ProblemReviewService {
         }
     }
 
+
+
     /**
      * 数据库事务失败时尽量将已移动的目录放回暂存区。
      */
@@ -254,9 +258,13 @@ public class ProblemReviewServiceImpl implements ProblemReviewService {
         }
     }
 
+
+
     private Path resolveDataRoot() {
-        return Path.of(judgeProperties.getDataRoot()).toAbsolutePath().normalize();
+        return Path.of(sysProperties.getDataRoot()).toAbsolutePath().normalize();
     }
+
+
 
     private Path resolveOfficialDataRoot() {
         return resolveDataRoot().resolve("testData").normalize();

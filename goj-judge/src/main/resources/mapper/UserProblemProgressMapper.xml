@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.gusl.gojjudge.mapper.UserProblemProgressMapper">
+
+
+    <insert id="increase">
+        INSERT INTO user_problem_progress (user_id,
+                                           problem_id,
+                                           status,
+                                           first_submission_id,
+                                           first_submission_time,
+                                           last_submission_id,
+                                           last_submission_time,
+                                           attempt_count,
+                                           accepted_count,
+                                           first_accepted_submission_id,
+                                           first_accepted_time,
+                                           create_by)
+        VALUES (#{userId},
+                #{problemId},
+                #{progressStatus},
+                #{submissionId},
+                #{submissionTime},
+                #{submissionId},
+                #{submissionTime},
+                1,
+                #{acceptedIncrement},
+                CASE WHEN #{acceptedIncrement} = 1 THEN #{submissionId} ELSE NULL END,
+                CASE WHEN #{acceptedIncrement} = 1 THEN #{submissionTime} ELSE NULL END,
+                #{person})
+        ON DUPLICATE KEY UPDATE status                       = CASE
+                                                                   WHEN #{acceptedIncrement} = 1 THEN 'SOLVED'
+                                                                   ELSE status
+            END,
+                                last_submission_id           = CASE
+                                                                   WHEN #{submissionTime} >= last_submission_time
+                                                                       THEN #{submissionId}
+                                                                   ELSE last_submission_id
+                                    END,
+                                last_submission_time         = GREATEST(last_submission_time, #{submissionTime}),
+                                attempt_count                = attempt_count + 1,
+                                accepted_count               = accepted_count + #{acceptedIncrement},
+                                first_accepted_submission_id = CASE
+                                                                   WHEN first_accepted_submission_id IS NULL AND #{acceptedIncrement} = 1
+                                                                       THEN #{submissionId}
+                                                                   ELSE first_accepted_submission_id
+                                    END,
+                                first_accepted_time          = CASE
+                                                                   WHEN first_accepted_time IS NULL AND #{acceptedIncrement} = 1
+                                                                       THEN #{submissionTime}
+                                                                   ELSE first_accepted_time
+                                    END,
+                                update_by                    = #{person},
+                                update_time                  = CURRENT_TIMESTAMP
+    </insert>
+
+    <select id="selectFirstAcceptedSubmissionId" resultType="java.lang.Long">
+        SELECT first_accepted_submission_id
+        FROM user_problem_progress
+        WHERE user_id = #{userId}
+          AND problem_id = #{problemId}
+    </select>
+</mapper>

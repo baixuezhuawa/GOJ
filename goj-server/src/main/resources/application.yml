@@ -1,6 +1,19 @@
 goj:
     # 测试数据存放的跟目录, 用于构造测试数据路径
   data-root: D:\ProgramData\goj-data
+  pagination:
+    # 默认页码，从 1 开始
+    default-page: 1
+
+    # 默认每页数量
+    default-size: 20
+
+    # 单页允许查询的最大数量
+    max-size: 100
+
+  profile:
+    recent-submission-size: 7 # 条
+    frequency-of-repeated-submissions: 2 # 分钟
 
   submission:
     max-code-length: 2000 # 字符
