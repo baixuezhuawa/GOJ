@@ -28,7 +28,7 @@ public class SecurityConfig {
     /**
      * 自定义用户认证逻辑
      */
-    private final UserDetailsService userDetailsService; // TODO: 自定义用户认证逻辑
+    private final UserDetailsService userDetailsService;
 
     private final JwtAuthenticationTokenFilter jwtAuthenticationTokenFilter;
 

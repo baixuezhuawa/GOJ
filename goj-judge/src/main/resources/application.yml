@@ -1,23 +1,23 @@
-# TODO 需要从 Nacos 同步数据了, 在goj-judge同样需要这个配置.
-# 在goj-judge需要上传题目数据就需要这些配置
-# 后续租服务器再考虑升级 Nacos 不然总是需要手动启动虚拟机太麻烦
-# 目前先保持一样的配置先
 goj:
   judge:
-    data-root: D:\ProgramData\goj-data
-    sandbox-base-url: http://192.168.100.128:5050
+    worker-name: worker-01  # 测评机代号
+    data-root: D:\ProgramData\goj-data  # 数据根目录
+    sandbox-base-url: http://192.168.100.128:5050  # 沙箱地址
+    task:
+      recovery-scan-ms: 30000  # 租约过期任务扫描间隔，单位毫秒
+      retry-initial-delay-seconds: 10  # 重试间隔
+      processing-timeout-minutes: 10  # 任务最长执行时间
+
     # Judge 端只在这里配置实际可执行的语言工具链；server 端另外维护对外可提交语言目录。
     languages:
       java11:
         code: java11
-        # 以下路径是沙箱镜像内的路径，不是 Judge 宿主机路径。
         javac: /usr/local/java/jdk11/bin/javac
         java:  /usr/local/java/jdk11/bin/java
         jar: /usr/local/java/jdk11/bin/jar
         env: PATH=/usr/local/java/jdk11/bin:/usr/bin:/bin
         active-cache-file-name: Main.jar
         compile:
-          # GOJ 配置使用 ms/KB；Adapter 发给 go-judge 前会转换成 ns/bytes。
           cpu-limit-ms: 10000
           real-cpu-limit-ms: 30000
           memory-limit-kb: 524288
@@ -25,7 +25,6 @@ goj:
           proc-limit: 64
           stdout-limit-bytes: 16777216
           stderr-limit-bytes: 16777216
-
       py3:
         code: py3
         python: /usr/bin/python3
@@ -48,8 +47,7 @@ spring:
     openfeign:
       client:
         config:
-          # 设置沙箱的连接超时
-          go-judge-sandbox:
+          go-judge-sandbox:  # 设置沙箱的连接超时
             connect-timeout: 2000
             read-timeout: 30000
             logger-level: basic
@@ -66,18 +64,13 @@ spring:
       port: 6379
       password:
       database: 0
-      # 连接超时时间
-      timeout: 10s
+      timeout: 10s  # 连接超时时间
       lettuce:
         pool:
-          # 连接池中的最小空闲连接
-          min-idle: 0
-          # 连接池中的最大空闲连接
-          max-idle: 8
-          # 连接池的最大数据库连接数
-          max-active: 8
-          # 连接池最大阻塞等待时间
-          max-wait: -1ms
+          min-idle: 0   # 连接池中的最小空闲连接
+          max-idle: 8  # 连接池中的最大空闲连接
+          max-active: 8  # 连接池的最大数据库连接数
+          max-wait: -1ms  # 连接池最大阻塞等待时间
 
 # 日志配置
 logging:
@@ -88,8 +81,7 @@ logging:
 # mybatis-plus配置
 mybatis-plus:
   configuration:
-    # 开启驼峰映射
-    map-underscore-to-camel-case: true
+    map-underscore-to-camel-case: true  # 开启驼峰映射
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
 

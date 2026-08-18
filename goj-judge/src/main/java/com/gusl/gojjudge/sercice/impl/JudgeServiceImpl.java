@@ -3,11 +3,7 @@ package com.gusl.gojjudge.sercice.impl;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import com.gusl.common.constant.JudgingConstant;
-import com.gusl.common.constant.ProblemStatus;
-import com.gusl.common.constant.ProblemTestDataStatus;
-import com.gusl.common.constant.SandBoxStatus;
-import com.gusl.common.constant.SystemConstant;
+import com.gusl.common.constant.*;
 import com.gusl.common.pojo.entity.Problem;
 import com.gusl.common.pojo.entity.ProblemReviewSubmission;
 import com.gusl.common.pojo.entity.ProblemTestData;
@@ -48,24 +44,12 @@ import java.util.function.Supplier;
 @RequiredArgsConstructor
 public class JudgeServiceImpl implements JudgeService {
 
-    /**
-     * 终态集合，用于判断何时写入测评结束时间。
-     */
-    private static final Set<String> TERMINAL_STATUSES = Set.of(
-            JudgingConstant.COMPILE_ERROR,
-            JudgingConstant.WRONG_ANSWER,
-            JudgingConstant.ACCEPTED,
-            JudgingConstant.TIME_LIMIT_EXCEEDED,
-            JudgingConstant.MEMORY_LIMIT_EXCEEDED,
-            JudgingConstant.RUNTIME_ERROR,
-            SystemConstant.SYSTEM_ERROR
-    );
-
     @Value("${goj.judge.data-root}")
     private String dataRoot;
 
     /**
      * 公共测评流程所需的题目和测试数据。
+     * 使用 Java 16 引入的 record 作为不可变数据载体，避免测评材料在流程中被修改。
      */
     private record JudgeMaterial(Problem problem, ProblemTestData testData) {
     }
@@ -100,7 +84,9 @@ public class JudgeServiceImpl implements JudgeService {
      */
     private final List<AbstractLanguageAdapter> languageAdapters;
 
-    /** 普通提交结果写回服务，负责终态幂等更新和派生统计维护。 */
+    /**
+     * 普通提交结果写回服务，负责终态幂等更新和派生统计维护。
+     */
     private final SubmissionResultService submissionResultService;
 
 
@@ -109,29 +95,29 @@ public class JudgeServiceImpl implements JudgeService {
      */
     @Override
     public void judgeSubmission(Long submissionId) {
-        // 仅允许一个 Worker 把任务从排队状态推进到等待状态。
-        int affectedRows = submissionMapper.update(
-                Wrappers.<Submission>lambdaUpdate()
-                        .set(Submission::getStatus, JudgingConstant.WAIT)
-                        .set(Submission::getJudgeStartTime, LocalDateTime.now())
-                        .eq(Submission::getId, submissionId)
-                        .eq(Submission::getStatus, JudgingConstant.IN_QUEUE)
-        );
-        if (affectedRows == 0) {
-            log.info("普通提交 {} 不存在或已被其他 Worker 处理", submissionId);
+       Submission submission = submissionMapper.selectById(submissionId);
+
+       if(submission == null){
+           throw new SystemErrorException("普通提交不存在: " + submissionId);
+       }
+
+        // 业务结果已经落库，说明可能只差 judge_task 的成功状态。
+        if (JudgingConstant.TERMINAL_STATUSES.contains(submission.getStatus())) {
+            log.info("普通提交已经完成，无需重复测评，{}", submissionId);
             return;
         }
 
-        // 普通提交只从 submission 表读取，并固定加载已发布题目和正式测试数据。
-        Submission submission = submissionMapper.selectOne(
-                Wrappers.<Submission>lambdaQuery()
+        // judge_task 已经完成原子领取，这里只更新业务展示状态。
+        submissionMapper.update(
+                Wrappers.<Submission>lambdaUpdate()
+                        .set(Submission::getStatus, JudgingConstant.WAIT)
+                        .set(
+                                submission.getJudgeStartTime() == null,
+                                Submission::getJudgeStartTime,
+                                LocalDateTime.now()
+                        )
                         .eq(Submission::getId, submissionId)
-                        .eq(Submission::getStatus, JudgingConstant.WAIT)
         );
-        if (submission == null) {
-            log.error("普通提交 {} 领取成功后无法读取记录", submissionId);
-            return;
-        }
 
         // 把明确的普通提交数据交给公共测评流程。
         executeJudge(
@@ -148,27 +134,16 @@ public class JudgeServiceImpl implements JudgeService {
      */
     @Override
     public void judgeProblemReview(Long reviewSubmissionId) {
-        // 验题任务只在 problem_review_submission 表中领取。
-        int affectedRows = reviewSubmissionMapper.update(
-                Wrappers.<ProblemReviewSubmission>lambdaUpdate()
-                        .set(ProblemReviewSubmission::getStatus, JudgingConstant.WAIT)
-                        .set(ProblemReviewSubmission::getJudgeStartTime, LocalDateTime.now())
-                        .eq(ProblemReviewSubmission::getId, reviewSubmissionId)
-                        .eq(ProblemReviewSubmission::getStatus, JudgingConstant.IN_QUEUE)
-        );
-        if (affectedRows == 0) {
-            log.info("管理员验题提交 {} 不存在或已被其他 Worker 处理", reviewSubmissionId);
-            return;
+        // 加载管理员验题记录。
+        ProblemReviewSubmission submission = reviewSubmissionMapper.selectById(reviewSubmissionId);
+
+        if (submission == null) {
+            throw new SystemErrorException("管理员验题提交不存在 " + reviewSubmissionId);
         }
 
-        // 验题任务只从独立验题表读取，并使用创建任务时固定的测试数据集 id。
-        ProblemReviewSubmission submission = reviewSubmissionMapper.selectOne(
-                Wrappers.<ProblemReviewSubmission>lambdaQuery()
-                        .eq(ProblemReviewSubmission::getId, reviewSubmissionId)
-                        .eq(ProblemReviewSubmission::getStatus, JudgingConstant.WAIT)
-        );
-        if (submission == null) {
-            log.error("管理员验题提交 {} 领取成功后无法读取记录", reviewSubmissionId);
+        // 已经产生终态时不重复执行测评。
+        if (JudgingConstant.TERMINAL_STATUSES.contains(submission.getStatus())) {
+            log.info("管理员验题已经完成，无需重复测评 {}", reviewSubmissionId);
             return;
         }
 
@@ -181,6 +156,64 @@ public class JudgeServiceImpl implements JudgeService {
                 outcome -> updateProblemReviewSubmission(reviewSubmissionId, outcome)
         );
     }
+
+
+    /**
+     * 判断测评任务对应的业务记录是否已经进入终态。
+     *
+     * @param taskType 任务类型
+     * @param businessId 业务记录 id
+     * @return 是否已经进入终态
+     */
+    @Override
+    public boolean isBusinessTerminal(String taskType, Long businessId) {
+        if (JudgeTaskType.SUBMISSION.equals(taskType)) {
+            Submission submission = submissionMapper.selectById(businessId);
+            return submission != null
+                    && JudgingConstant.TERMINAL_STATUSES.contains(submission.getStatus());
+        }
+
+        if (JudgeTaskType.PROBLEM_REVIEW.equals(taskType)) {
+            ProblemReviewSubmission submission = reviewSubmissionMapper.selectById(businessId);
+            return submission != null
+                    && JudgingConstant.TERMINAL_STATUSES.contains(submission.getStatus());
+        }
+
+        throw new IllegalArgumentException("不支持的测评任务类型：" + taskType);
+    }
+
+
+    /**
+     * 在测评任务死亡后写入业务记录的系统错误终态。
+     */
+    @Override
+    public void markSystemError(String taskType, Long businessId, String errorMessage) {
+        JudgeOutcome outcome = new JudgeOutcome();
+        outcome.setCurStatus(SystemConstant.SYSTEM_ERROR);
+        outcome.setJudgeMsg(errorMessage);
+
+        // 普通测评
+        if (JudgeTaskType.SUBMISSION.equals(taskType)) {
+            Submission submission = submissionMapper.selectById(businessId);
+            if (submission == null) {
+                log.error("普通提交不存在，submissionId={}", businessId);
+                return;
+            }
+
+            submissionResultService.updateSubmission(submission, outcome);
+            return;
+        }
+
+        // 验题
+        if (JudgeTaskType.PROBLEM_REVIEW.equals(taskType)) {
+            // 因为是验题, 不需要更新有关用户做题数据的表
+            updateProblemReviewSubmission(businessId, outcome);
+            return;
+        }
+
+        log.error("无法写入系统错误，不支持的任务类型：{}", taskType);
+    }
+
 
     /**
      * 执行两类任务共用的编译、运行、结果比较和异常映射流程。
@@ -237,35 +270,44 @@ public class JudgeServiceImpl implements JudgeService {
             log.info("{} 编译失败", taskLabel);
             judgeOutcome.setCurStatus(JudgingConstant.COMPILE_ERROR);
             judgeOutcome.setCompilerMsg(exception.getMessage());
+
         } catch (RuntimeErrorException exception) {
             log.info("{} 运行时错误", taskLabel);
             judgeOutcome.setCurStatus(JudgingConstant.RUNTIME_ERROR);
             judgeOutcome.setJudgeMsg(exception.getMessage());
+
         } catch (TLEException exception) {
             log.info("{} 时间超限", taskLabel);
             judgeOutcome.setCurStatus(JudgingConstant.TIME_LIMIT_EXCEEDED);
             judgeOutcome.setJudgeMsg(exception.getMessage());
+
         } catch (MLEException exception) {
             log.info("{} 内存超限", taskLabel);
             judgeOutcome.setCurStatus(JudgingConstant.MEMORY_LIMIT_EXCEEDED);
             judgeOutcome.setJudgeMsg(exception.getMessage());
+
         } catch (WAException exception) {
             log.info("{} 答案错误", taskLabel);
             judgeOutcome.setCurStatus(JudgingConstant.WRONG_ANSWER);
             judgeOutcome.setJudgeMsg(exception.getMessage());
-        } catch (Exception exception) {
+
+        } catch (SystemErrorException exception) {
+            // 系统异常交给 JudgeTaskProcessor 决定重试或者死亡。
             log.warn("{} 发生测评系统异常", taskLabel, exception);
-            judgeOutcome.setCurStatus(SystemConstant.SYSTEM_ERROR);
-            judgeOutcome.setJudgeMsg(exception.getMessage());
-        } finally {
+            throw exception;
+
+        }catch (Exception exception){
+            // 未知程序异常同样按照系统异常处理。
+            log.error("{} 发生未知测评异常", taskLabel, exception);
+            throw new SystemErrorException("未知测评系统异常：" + exception.getMessage());
+
+        }finally {
             // 无论成功或失败，都写回各自业务表的终态并清理沙箱编译缓存。
-            try {
-                outcomeUpdater.accept(judgeOutcome);
-            } finally {
-                deleteCacheCompileFile(fileId);
-            }
+            deleteCacheCompileFile(fileId);
         }
+        outcomeUpdater.accept(judgeOutcome);
     }
+
 
     /**
      * 写回管理员验题提交状态。
@@ -280,7 +322,7 @@ public class JudgeServiceImpl implements JudgeService {
                         .set(cur.getJudgeMsg() != null, ProblemReviewSubmission::getJudgeMsg, cur.getJudgeMsg())
                         .set(cur.getScore() != null, ProblemReviewSubmission::getScore, cur.getScore())
                         .set(
-                                isTerminalStatus(cur.getCurStatus()), // 最终结果才更新测评结束时间
+                                JudgingConstant.TERMINAL_STATUSES.contains(cur.getCurStatus()), // 最终结果才更新测评结束时间
                                 ProblemReviewSubmission::getJudgeEndTime,
                                 LocalDateTime.now()
                         )
@@ -288,12 +330,6 @@ public class JudgeServiceImpl implements JudgeService {
         );
     }
 
-    /**
-     * 判断是否已经结束测试
-     */
-    private boolean isTerminalStatus(String status) {
-        return TERMINAL_STATUSES.contains(status);
-    }
 
     /**
      * 获取提交语言的对应适配器
@@ -304,6 +340,7 @@ public class JudgeServiceImpl implements JudgeService {
                 .findFirst()
                 .orElseThrow(() -> new SystemErrorException("暂不支持该语言: " + language));
     }
+
 
     /**
      * 加载普通用户提交使用的已发布题目和正式测试数据。
@@ -330,6 +367,7 @@ public class JudgeServiceImpl implements JudgeService {
         return new JudgeMaterial(problem, testData);
     }
 
+
     /**
      * 加载管理员验题提交固定的待审核题目和测试数据集。
      */
@@ -355,6 +393,7 @@ public class JudgeServiceImpl implements JudgeService {
         }
         return new JudgeMaterial(problem, testData);
     }
+
 
     /**
      * 编译
@@ -386,7 +425,6 @@ public class JudgeServiceImpl implements JudgeService {
 
 
         if (SandBoxStatus.INTERNAL_ERROR.equals(staus) || SandBoxStatus.FILE_ERROR.equals(staus)) {
-            // TODO 需要上报管理员, 后续添加错误信息收集, 或者通过日志管理系统获取(需要重测)
             throw new SystemErrorException(staus);
         }
         if (
@@ -407,6 +445,7 @@ public class JudgeServiceImpl implements JudgeService {
         cur.setCompilerMsg(compileMsg);
         return result.getJSONObject("fileIds").getString(cachedArtifactName);
     }
+
 
     /**
      * 运行代码
@@ -483,6 +522,7 @@ public class JudgeServiceImpl implements JudgeService {
         cur.setCurStatus(JudgingConstant.ACCEPTED);
     }
 
+
     /**
      * 读取一个测试点的输入或标准输出文件。
      */
@@ -496,6 +536,7 @@ public class JudgeServiceImpl implements JudgeService {
             throw new SystemErrorException("系统异常, 测试数据不完整");
         }
     }
+
 
     /**
      * 运行单个测试点
@@ -513,6 +554,7 @@ public class JudgeServiceImpl implements JudgeService {
         return result;
     }
 
+
     /**
      * 比较输入输出
      */
@@ -522,6 +564,7 @@ public class JudgeServiceImpl implements JudgeService {
         return stdOutput.equals(realOutput);
     }
 
+
     /**
      * 规范化输入输出
      */
@@ -530,6 +573,7 @@ public class JudgeServiceImpl implements JudgeService {
                 .replace("\r\n", "\n")
                 .stripTrailing();
     }
+
 
     /**
      * 删除沙箱编译缓存文件

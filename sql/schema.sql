@@ -276,17 +276,17 @@ DROP TABLE IF EXISTS `user_problem_progress`;
 DROP TABLE IF EXISTS `user_activity_day`;
 CREATE TABLE `user_activity_day`
 (
-    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '日期活跃记录 id',
-    `user_id` BIGINT NOT NULL COMMENT '用户 id',
-    `activity_date` DATE NOT NULL COMMENT '活动日期',
-    `accepted_count` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '当天 Accepted 提交数量',
+    `id`                       BIGINT       NOT NULL AUTO_INCREMENT COMMENT '日期活跃记录 id',
+    `user_id`                  BIGINT       NOT NULL COMMENT '用户 id',
+    `activity_date`            DATE         NOT NULL COMMENT '活动日期',
+    `accepted_count`           INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '当天 Accepted 提交数量',
     `new_solved_problem_count` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '当天新解决题目数量',
 
-    `create_by` VARCHAR(64) DEFAULT NULL COMMENT '创建人',
-    `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    `update_by` VARCHAR(64) DEFAULT NULL COMMENT '更新人',
-    `update_time` DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-    `remark` VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    `create_by`                VARCHAR(64)           DEFAULT NULL COMMENT '创建人',
+    `create_time`              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_by`                VARCHAR(64)           DEFAULT NULL COMMENT '更新人',
+    `update_time`              DATETIME              DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `remark`                   VARCHAR(500)          DEFAULT NULL COMMENT '备注',
 
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_user_activity_day` (`user_id`, `activity_date`),
@@ -396,3 +396,69 @@ CREATE TABLE `user_language_stat`
   DEFAULT CHARACTER SET = utf8mb4
   COLLATE = utf8mb4_unicode_ci
     COMMENT = '用户语言使用统计表';
+
+
+DROP TABLE IF EXISTS `judge_task`;
+CREATE TABLE `judge_task`
+(
+    `id`                 BIGINT       NOT NULL AUTO_INCREMENT COMMENT '测评任务 id',
+
+    `task_type`          VARCHAR(32)  NOT NULL
+        COMMENT '任务类型：SUBMISSION 普通提交，PROBLEM_REVIEW 管理员验题',
+
+    `business_id`        BIGINT       NOT NULL
+        COMMENT '业务记录 id，对应 submission.id 或 problem_review_submission.id',
+
+    `task_version`       INT UNSIGNED NOT NULL DEFAULT 1
+        COMMENT '任务版本，同一业务记录重新测评时递增',
+
+    `status`             VARCHAR(16)  NOT NULL DEFAULT 'PENDING'
+        COMMENT '任务状态：PENDING、PROCESSING、RETRY_WAIT、SUCCEEDED、DEAD',
+
+    `attempt_count`      INT UNSIGNED NOT NULL DEFAULT 0
+        COMMENT '实际执行次数',
+
+    `max_attempts`       INT UNSIGNED NOT NULL DEFAULT 3
+        COMMENT '最大执行次数',
+
+    `next_retry_time`    DATETIME              DEFAULT NULL
+        COMMENT '下次允许重试的时间',
+
+    `lease_owner`        VARCHAR(64)           DEFAULT NULL
+        COMMENT '当前领取任务的 Worker 标识',
+
+    `lease_expire_time`  DATETIME              DEFAULT NULL
+        COMMENT '任务处理租约过期时间',
+
+    `last_dispatch_time` DATETIME              DEFAULT NULL
+        COMMENT '最近一次发送到消息队列的时间',
+
+    `last_error`         TEXT                  DEFAULT NULL
+        COMMENT '最近一次执行失败的简要错误信息',
+
+    `create_by`          VARCHAR(64)           DEFAULT NULL COMMENT '创建人',
+    `create_time`        DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_by`          VARCHAR(64)           DEFAULT NULL COMMENT '更新人',
+    `update_time`        DATETIME              DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `remark`             VARCHAR(500)          DEFAULT NULL COMMENT '备注',
+
+    PRIMARY KEY (`id`),
+
+    UNIQUE KEY `uk_judge_task_business_version`
+        (`task_type`, `business_id`, `task_version`),
+
+    KEY `idx_judge_task_status_dispatch`
+        (`status`, `last_dispatch_time`),
+
+    KEY `idx_judge_task_status_retry`
+        (`status`, `next_retry_time`),
+
+    KEY `idx_judge_task_status_lease`
+        (`status`, `lease_expire_time`),
+
+    KEY `idx_judge_task_business`
+        (`task_type`, `business_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARACTER SET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci
+    COMMENT = '测评任务可靠调度表';

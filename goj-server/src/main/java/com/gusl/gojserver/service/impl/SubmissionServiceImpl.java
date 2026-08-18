@@ -7,18 +7,13 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.gusl.common.common.BaseException;
 import com.gusl.common.common.PageResult;
-import com.gusl.common.constant.JudgeQueueConstant;
-import com.gusl.common.constant.JudgingConstant;
-import com.gusl.common.constant.ProblemStatus;
-import com.gusl.common.constant.ProblemTestDataStatus;
+import com.gusl.common.constant.*;
+import com.gusl.common.pojo.entity.JudgeTask;
 import com.gusl.common.pojo.entity.Problem;
 import com.gusl.common.pojo.entity.ProblemTestData;
 import com.gusl.common.utils.StringUtils;
 import com.gusl.gojserver.config.properties.SysProperties;
-import com.gusl.gojserver.mapper.ProblemMapper;
-import com.gusl.gojserver.mapper.ProblemTestDataMapper;
-import com.gusl.gojserver.mapper.SubmissionMapper;
-import com.gusl.gojserver.mapper.UserMapper;
+import com.gusl.gojserver.mapper.*;
 import com.gusl.gojserver.pojo.dto.Submission2JudgeDto;
 import com.gusl.gojserver.pojo.dto.SubmissionSearchDto;
 import com.gusl.gojserver.pojo.entity.LoginUser;
@@ -30,8 +25,10 @@ import com.gusl.gojserver.service.support.JudgeSourceValidator;
 import com.gusl.gojserver.service.support.PageFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
@@ -42,13 +39,14 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
 
     private final SubmissionMapper submissionMapper;
 
-    private final StringRedisTemplate redisTemplate;
-
     private final UserMapper userMapper;
 
     private final ProblemMapper problemMapper;
 
     private final ProblemTestDataMapper problemTestDataMapper;
+
+    private final JudgeTaskMapper judgeTaskMapper;
+
 
     private final JudgeSourceValidator judgeSourceValidator;
 
@@ -56,9 +54,15 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
 
     private final PageFactory pageFactory;
 
+    @Value("${goj.judge.task.max-attempts}")
+    private Integer maxAttempts;
+
+
     /** 将用户的提交, 提交到测评机 */
+    @Transactional(rollbackFor = Exception.class)
     @Override
     public Long submitProblemToJudge(Submission2JudgeDto submission2JudgeDto, LoginUser loginUser) {
+        // 校验提交是否合法
         requirePublishedProblem(submission2JudgeDto.getProblemId());
         requirePublishedTestData(submission2JudgeDto.getProblemId());
         String sha256 = judgeSourceValidator.validateAndHash(
@@ -66,31 +70,40 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
                 submission2JudgeDto.getSourceCode()
         );
         requireNoRecentDuplicate(submission2JudgeDto, loginUser.getUserId(), sha256);
-        Submission submission = BeanUtil.copyProperties(submission2JudgeDto, Submission.class);
-        return enqueueSubmission(submission, loginUser.getUserId(), sha256);
+
+        // 推送提交到测评机
+        return enqueueSubmission(submission2JudgeDto, loginUser.getUserId(), sha256);
     }
 
 
 
     /** 保存提交并将 submissionId 放入 Judge 队列。 */
-    private Long enqueueSubmission(Submission submission, Long userId, String sha256) {
+    private Long enqueueSubmission(Submission2JudgeDto submission2JudgeDto, Long userId, String sha256) {
+
+        // 保存 submission 到数据库
+        Submission submission = BeanUtil.copyProperties(submission2JudgeDto, Submission.class);
         submission.setStatus(JudgingConstant.IN_QUEUE);
         submission.setUserId(userId);
         submission.setSubmissionTime(LocalDateTime.now());
         submission.setSourceSha256(sha256);
         submissionMapper.insert(submission);
+
         log.info("提交用户id:{} 测评问题id:{} 测评id:{} ----- 开始测评",
                 submission.getUserId(),
                 submission.getProblemId(),
                 submission.getId()
         );
-        // 构造测评请求... v1 版本暂时跳过
-        // 通过redis队列充当消息队列发送请求.
-        redisTemplate.opsForList().leftPush(
-                JudgeQueueConstant.SUBMISSION_READY_QUEUE,
-                submission.getId().toString()
-        );
-        log.info("submissionId:{} in queue", submission.getId());
+
+        // 保存 judgeTask 到数据库
+        JudgeTask judgeTask = JudgeTask.builder()
+                .businessId(submission.getId())
+                .status(JudgeTaskStatus.PENDING)
+                .taskType(JudgeTaskType.SUBMISSION)
+                .taskVersion(1)
+                .maxAttempts(maxAttempts)
+                .build();
+        judgeTaskMapper.insert(judgeTask);
+
         return submission.getId();
     }
 

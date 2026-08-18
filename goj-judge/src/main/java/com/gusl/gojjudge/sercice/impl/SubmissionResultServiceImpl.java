@@ -15,10 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * 普通提交结果写回服务实现，统一处理状态更新和终态派生数据维护。
@@ -27,22 +24,9 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class SubmissionResultServiceImpl implements SubmissionResultService {
 
-    /** 终态集合，用于防止同一提交重复触发统计更新。 */
-    private static final Set<String> TERMINAL_STATUSES = new HashSet<>(Arrays.asList(
-            JudgingConstant.COMPILE_ERROR,
-            JudgingConstant.WRONG_ANSWER,
-            JudgingConstant.ACCEPTED,
-            JudgingConstant.TIME_LIMIT_EXCEEDED,
-            JudgingConstant.MEMORY_LIMIT_EXCEEDED,
-            JudgingConstant.RUNTIME_ERROR,
-            SystemConstant.SYSTEM_ERROR
-    ));
-
     private final SubmissionMapper submissionMapper;
 
-    /**
-     * 获取到所有更新器
-     */
+    /** 所有更新器 */
     private final List<SubmissionFinalizedUpdater> submissionFinalizedUpdaters;
 
     /**
@@ -54,7 +38,8 @@ public class SubmissionResultServiceImpl implements SubmissionResultService {
     @Override
     @Transactional(rollbackFor = Exception.class) // 统一进行事务回滚
     public void updateSubmission(Submission submission, JudgeOutcome outcome) {
-        boolean terminal = TERMINAL_STATUSES.contains(outcome.getCurStatus());
+        boolean terminal = JudgingConstant.TERMINAL_STATUSES.contains(outcome.getCurStatus());
+
         LocalDateTime judgeEndTime = terminal ? LocalDateTime.now() : null;
 
         // 构造提交状态和测评结果的统一更新条件。
@@ -67,7 +52,7 @@ public class SubmissionResultServiceImpl implements SubmissionResultService {
                 .set(outcome.getScore() != null, Submission::getScore, outcome.getScore())
                 .set(terminal, Submission::getJudgeEndTime, judgeEndTime)
                 .eq(Submission::getId, submission.getId())
-                .notIn(Submission::getStatus, TERMINAL_STATUSES);
+                .notIn(Submission::getStatus, JudgingConstant.TERMINAL_STATUSES); // 判断非终态
 
         // 任何后续写回都不能覆盖终态，终态重复消费也不会再次累加统计。
         int affectedRows = submissionMapper.update(updateWrapper);
@@ -85,8 +70,16 @@ public class SubmissionResultServiceImpl implements SubmissionResultService {
                 submission.getSubmissionTime(),
                 judgeEndTime
         );
+
+        // SYSTEM_ERROR 是平台异常，不计入用户提交、语言、做题进度等派生统计。
+        if (SystemConstant.SYSTEM_ERROR.equals(outcome.getCurStatus())) {
+            return;
+        }
+
+        // 遍历每个需要终态更新器, 更新需要的表
         for (SubmissionFinalizedUpdater updater : submissionFinalizedUpdaters) {
             updater.update(context);
         }
+
     }
 }

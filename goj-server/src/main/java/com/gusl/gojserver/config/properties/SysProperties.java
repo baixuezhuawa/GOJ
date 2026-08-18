@@ -1,5 +1,6 @@
 package com.gusl.gojserver.config.properties;
 
+import com.gusl.gojserver.config.properties.entity.FileProperties;
 import com.gusl.gojserver.config.properties.entity.PaginationProperties;
 import com.gusl.gojserver.config.properties.entity.ProfileProperties;
 import lombok.Data;
@@ -16,4 +17,6 @@ public class SysProperties {
     private ProfileProperties profile;
 
     private PaginationProperties pagination;
+
+    private FileProperties file;
 }

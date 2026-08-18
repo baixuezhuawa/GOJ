@@ -324,7 +324,7 @@ public class ProblemTestDataServiceImpl extends ServiceImpl<ProblemTestDataMappe
             ZipEntry entry;
 
             while ((entry = zipInput.getNextEntry()) != null) {
-                if (++entryCount > 1000) { // TODO 这个1000 可以写到配置文件中
+                if (++entryCount > sysProperties.getFile().getMaxEntry()) {
                     throw new BaseException("压缩包文件数量超过限制");
                 }
 
@@ -355,7 +355,7 @@ public class ProblemTestDataServiceImpl extends ServiceImpl<ProblemTestDataMappe
                     int length;
                     while ((length = zipInput.read(buffer)) != -1) {
                         totalBytes += length;
-                        if (totalBytes > 200L * 1024 * 1024) { // TODO 这个文件大小的限制同样如此
+                        if (totalBytes > sysProperties.getFile().getMaxTotalBytes()) {
                             throw new BaseException("解压后文件总大小超过限制");
                         }
                         output.write(buffer, 0, length);

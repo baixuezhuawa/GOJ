@@ -4,6 +4,7 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * GOJ Judge Worker 启动类。
@@ -11,6 +12,7 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
  * <p>启动 Spring 容器、扫描 MyBatis Mapper，并启用 go-judge Feign 客户端。
  * 实际用户代码执行仍在独立沙箱中完成。</p>
  */
+@EnableScheduling
 @SpringBootApplication
 @EnableFeignClients(basePackages = "com.gusl.gojjudge.client")
 @MapperScan("com.gusl.gojjudge.mapper")
