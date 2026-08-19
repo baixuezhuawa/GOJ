@@ -1,5 +1,7 @@
 package com.gusl.gojserver.service;
 
+import com.gusl.common.common.PageQuery;
+import com.gusl.common.common.PageResult;
 import com.gusl.gojserver.pojo.vo.AdminProblemReviewDetailVo;
 import com.gusl.gojserver.pojo.vo.AdminProblemReviewListVo;
 
@@ -13,11 +15,9 @@ public interface ProblemReviewService {
     /**
      * 分页获取待审核题目。
      *
-     * @param page 页码，从 1 开始
-     * @param size 每页数量
      * @return 待审核题目列表
      */
-    List<AdminProblemReviewListVo> getPendingReviews(Integer page, Integer size);
+    PageResult<AdminProblemReviewListVo> getPendingReviews(PageQuery pageQuery);
 
     /**
      * 获取待审核题目详情和测试数据摘要。

@@ -1,6 +1,7 @@
 package com.gusl.gojserver.controller.system;
 
 import com.gusl.common.common.BaseController;
+import com.gusl.common.common.PageQuery;
 import com.gusl.common.common.Result;
 import com.gusl.gojserver.pojo.dto.ProblemReviewJudgeDto;
 import com.gusl.gojserver.pojo.dto.ProblemReviewRejectDto;
@@ -12,13 +13,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * 管理员题目审核接口。
@@ -37,12 +32,9 @@ public class AdminProblemReviewController extends BaseController {
      * 分页获取待审核题目列表。
      */
     @Operation(summary = "待审核题目列表")
-    @GetMapping
-    public Result getPendingReviews(
-            @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size
-    ) {
-        return success("操作成功", problemReviewService.getPendingReviews(page, size));
+    @GetMapping("/list")
+    public Result getPendingReviews(@ModelAttribute PageQuery query) {
+        return success("操作成功", problemReviewService.getPendingReviews(query));
     }
 
     /**

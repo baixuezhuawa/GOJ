@@ -6,16 +6,53 @@
 
 
     <select id="selectPendingReviews" resultType="com.gusl.gojserver.pojo.vo.AdminProblemReviewListVo">
-        select
-            p.id as problemId,
-            p.problem_name as problemName,
-            u.id as userId,
-            u.username,
-            p.create_time as createTime
+        select p.id           as problemId,
+               p.problem_name as problemName,
+               u.id           as userId,
+               u.username,
+               p.create_time  as createTime
         from problem p
-        left join sys_user u on p.author_id = u.id
+                 left join sys_user u on p.author_id = u.id
         where p.status = #{status}
         order by p.create_time asc, p.id asc
-        limit #{offset}, #{size}
+    </select>
+
+    <select id="selectProblemPage" resultType="com.gusl.gojserver.pojo.vo.ProblemPageListVo">
+        SELECT
+        p.id AS problemId,
+        p.problem_name AS problemName,
+        p.difficulty,
+        CASE
+        WHEN #{userId} IS NULL THEN 'UNATTEMPTED'
+        ELSE COALESCE(upp.status, 'UNATTEMPTED')
+        END AS status
+        FROM problem p
+        LEFT JOIN user_problem_progress upp ON upp.problem_id = p.id AND upp.user_id = #{userId}
+        WHERE p.status = #{publishStatus}
+
+        <if test="dto.keyword != null and dto.keyword != ''">
+            AND (
+            p.problem_name LIKE CONCAT('%', #{dto.keyword}, '%')
+            OR CAST(p.id AS CHAR) = #{dto.keyword}
+            )
+        </if>
+
+        <if test="dto.difficultyMin != null">
+            AND p.difficulty &gt;= #{dto.difficultyMin}
+        </if>
+
+        <if test="dto.difficultyMax != null">
+            AND p.difficulty &lt;= #{dto.difficultyMax}
+        </if>
+
+        <if test="userId != null and dto.solveStatus != null and dto.solveStatus != ''">
+            AND (
+                    (#{dto.solveStatus} = 'UNATTEMPTED' AND upp.id IS NULL)
+                OR
+                    (#{dto.solveStatus} != 'UNATTEMPTED' AND upp.status = #{dto.solveStatus})
+                )
+        </if>
+
+        ORDER BY p.id ASC
     </select>
 </mapper>
