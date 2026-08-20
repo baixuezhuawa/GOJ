@@ -60,7 +60,13 @@ public class JudgeTaskFailureService {
             return;
         }
 
-        // 业务结果已经成功落库时，只补齐任务成功状态，不再重复测评。
+        /*
+        像是在一个测评结束后, submission表已经更新好了, 没有发生系统问题.
+        但是在更新JudgeTask表的阶段, 出现MySQL宕机, 连接中断等情况.
+        导致业务实际已经完成(submission测评已经结束并更新完成为终态), 但JudgeTask还没有更新好.
+        出现状态不一致的情况(submission(finish), judgeTask(processing)).
+        下面这个判断就为了解决这个数据不一致时, 防止重复测评的判断.
+         */
         if (judgeService.isBusinessTerminal(task.getTaskType(), task.getBusinessId())) {
             markSucceeded(task, null);
             return;
