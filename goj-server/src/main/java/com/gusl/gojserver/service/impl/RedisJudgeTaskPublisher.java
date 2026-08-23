@@ -59,6 +59,10 @@ public class RedisJudgeTaskPublisher implements JudgeTaskPublisher {
             return JudgeQueueConstant.PROBLEM_REVIEW_READY_QUEUE;
         }
 
+        if(JudgeTaskType.CONTEST_SUBMISSION.equals(taskType)){
+            return JudgeQueueConstant.CONTEST_READY_QUEUE;
+        }
+
         throw new IllegalArgumentException("不支持的测评任务类型：" + taskType);
     }
 }

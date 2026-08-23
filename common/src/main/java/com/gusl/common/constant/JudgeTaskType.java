@@ -12,4 +12,6 @@ public class JudgeTaskType {
     /** 管理员验题提交。 */
     public static final String PROBLEM_REVIEW = "PROBLEM_REVIEW";
 
+    /** 赛时提交 */
+    public static final String CONTEST_SUBMISSION = "CONTEST_SUBMISSION";
 }

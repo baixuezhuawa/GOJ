@@ -2,6 +2,7 @@ package com.gusl.gojserver.service.impl;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.gusl.common.constant.JudgeTaskStatus;
+import com.gusl.common.constant.JudgeTaskType;
 import com.gusl.common.pojo.entity.JudgeTask;
 import com.gusl.common.pojo.entity.JudgeTaskMessage;
 import com.gusl.gojserver.mapper.JudgeTaskMapper;
@@ -38,18 +39,10 @@ public class JudgeTaskDispatcher {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime redispatchBefore = now.minusSeconds(30);
 
-        // 查询首次等待调度的任务。
-        List<JudgeTask> pendingTasks = judgeTaskMapper.selectList(
-                Wrappers.<JudgeTask>lambdaQuery()
-                        .eq(JudgeTask::getStatus, JudgeTaskStatus.PENDING)
-                        .and(wrapper -> wrapper
-                                .isNull(JudgeTask::getLastDispatchTime)
-                                .or()
-                                .lt(JudgeTask::getLastDispatchTime, redispatchBefore)
-                        )
-                        .orderByAsc(JudgeTask::getId)
-                        .last("LIMIT 100")
-        );
+        // 查询第一次新任务
+        List<JudgeTask> contest = searchTask(JudgeTaskType.CONTEST_SUBMISSION, redispatchBefore);
+        List<JudgeTask> adminTask = searchTask(JudgeTaskType.PROBLEM_REVIEW, redispatchBefore);
+        List<JudgeTask> regular = searchTask(JudgeTaskType.SUBMISSION, redispatchBefore);
 
         // 查询已经到达重试时间的任务。
         List<JudgeTask> retryTasks = judgeTaskMapper.selectList(
@@ -65,16 +58,45 @@ public class JudgeTaskDispatcher {
                         .last("LIMIT 100")
         );
 
-        // 分别发布首次任务和重试任务。
-        for (JudgeTask task : pendingTasks) {
-            dispatchOne(task);
-        }
 
-        for (JudgeTask task : retryTasks) {
-            dispatchOne(task);
-        }
+        // 优先发送比赛任务
+        for (JudgeTask task : contest) dispatchOne(task);
+
+        // 验题任务
+        for(JudgeTask task : adminTask) dispatchOne(task);
+
+        // 普通任务
+        for(JudgeTask task : regular) dispatchOne(task);
+
+        // 重试任务
+        for (JudgeTask task : retryTasks) dispatchOne(task);
 
     }
+
+
+
+    /**
+     * 搜索任务
+     * @param taskType 任务类型
+     * @param redispatchBefore 重新派遣时间
+     * @return 任务列表
+     */
+    private List<JudgeTask> searchTask(String taskType, LocalDateTime redispatchBefore){
+        return judgeTaskMapper.selectList(
+                Wrappers.<JudgeTask>lambdaQuery()
+                        .eq(JudgeTask::getTaskType, taskType)
+                        .eq(JudgeTask::getStatus, JudgeTaskStatus.PENDING)
+                        .and(wrapper -> wrapper
+                                .isNull(JudgeTask::getLastDispatchTime)
+                                .or()
+                                .lt(JudgeTask::getLastDispatchTime, redispatchBefore)
+                        )
+                        .orderByAsc(JudgeTask::getId)
+                        .last("LIMIT 100")
+        );
+    }
+
+
 
     /**
      * 发布测评任务

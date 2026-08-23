@@ -462,3 +462,87 @@ CREATE TABLE `judge_task`
   DEFAULT CHARACTER SET = utf8mb4
   COLLATE = utf8mb4_unicode_ci
     COMMENT = '测评任务可靠调度表';
+
+
+-- 比赛系统, 新增表
+DROP TABLE IF EXISTS `contest_submission`;
+CREATE TABLE `contest_submission`
+(
+    `id`               BIGINT       NOT NULL AUTO_INCREMENT COMMENT '提交 id',
+    `user_id`          BIGINT       NOT NULL COMMENT '提交用户 id',
+    `problem_id`       BIGINT       NOT NULL COMMENT '题目 id',
+    `contest_id`       BIGINT       NOT NULL COMMENT '比赛id',
+    `language`         VARCHAR(32)  NOT NULL COMMENT '编程语言，例如 JAVA',
+    `source_code`      LONGTEXT     NOT NULL COMMENT '提交的源代码',
+    `status`           VARCHAR(32)  NOT NULL DEFAULT 'QUEUED' COMMENT '评测状态',
+    `score`            INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '评测得分',
+    `time_ms`          INT UNSIGNED          DEFAULT NULL COMMENT '运行耗时，单位毫秒',
+    `memory_kb`        INT UNSIGNED          DEFAULT NULL COMMENT '运行内存，单位 KB',
+    `compiler_msg`     TEXT                  DEFAULT NULL COMMENT '编译器输出信息',
+    `judge_msg`        TEXT                  DEFAULT NULL COMMENT '评测或运行信息',
+    `submission_time`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '提交时间',
+    `source_sha256`    CHAR(64)     NOT NULL COMMENT '源代码 SHA-256',
+    `version`          INT          NOT NULL COMMENT '测评版本',
+    `judge_start_time` DATETIME              DEFAULT NULL COMMENT '评测开始时间',
+    `judge_end_time`   DATETIME              DEFAULT NULL COMMENT '评测结束时间',
+    `create_by`        VARCHAR(64)           DEFAULT NULL COMMENT '创建人',
+    `create_time`      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_by`        VARCHAR(64)           DEFAULT NULL COMMENT '更新人',
+    `update_time`      DATETIME              DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `remark`           VARCHAR(500)          DEFAULT NULL COMMENT '备注',
+    PRIMARY KEY (`id`),
+    KEY `idx_submission_user_time` (`user_id`, `submission_time`),
+    KEY `idx_submission_problem_time` (`problem_id`, `submission_time`),
+    KEY `idx_submission_status` (`status`)
+) ENGINE = InnoDB
+  DEFAULT CHARACTER SET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci
+    COMMENT = '比赛代码提交表';
+
+
+
+drop table if exists `contest`;
+CREATE TABLE `contest`
+(
+    id                  bigint      not null primary key auto_increment comment '主键',
+    title               text        not null comment '比赛描述',
+    status              varchar(50) not null comment '比赛状态',
+    description         text comment '比赛描述',
+    register_start_time datetime    not null comment '报名开始时间',
+    register_end_time   datetime    not null comment '报名结束时间',
+    start_time          datetime    not null comment '比赛开始时间',
+    end_time            datetime    not null comment '比赛结束时间',
+    create_by           VARCHAR(64)          DEFAULT NULL COMMENT '创建人',
+    create_time         DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_by           VARCHAR(64)          DEFAULT NULL COMMENT '更新人',
+    update_time         DATETIME             DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    remark              VARCHAR(500)         DEFAULT NULL COMMENT '备注'
+) COMMENT = '比赛信息表';
+
+
+
+drop table if exists `contest_problem`;
+create table `contest_problem`
+(
+    id             bigint       not null primary key auto_increment comment '主键',
+    contest_id     bigint       not null comment '比赛id',
+    problem_id     bigint       not null comment '问题id',
+    display_name   varchar(50)  not null comment '问题展示名称',
+    display_code   varchar(20)  not null comment '问题编号',
+    sort_order     int          not null comment '排序权重',
+    test_data_id   bigint not null comment '测试数据id',
+    release_status varchar(50)  not null comment '题目状态',
+    unique key `ids_contest_display` (contest_id, display_code)
+) comment '比赛, 问题 关联表';
+
+
+drop table if exists `contest_participate`;
+create table `contest_participate`
+(
+    id               bigint      not null primary key auto_increment comment '主键',
+    user_id          bigint      not null comment '用户id',
+    contest_id       bigint      not null comment '比赛id',
+    participate_type varchar(50) not null comment '参与类型 real/virtual',
+    register_time    datetime default CURRENT_TIMESTAMP comment '注册时间',
+    unique key `ids_register` (user_id, contest_id, participate_type)
+) comment '比赛报名表';

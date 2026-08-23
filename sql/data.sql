@@ -13,7 +13,8 @@ VALUES (1, '用户管理', 'system:user:manage'),
        (5, '题目管理', 'problem:manage'),
        (6, '提交代码', 'submission:create'),
        (7, '查看自己的提交', 'submission:view:self'),
-       (8, '提交记录管理', 'submission:manage');
+       (8, '提交记录管理', 'submission:manage'),
+       (9, '比赛管理', 'contest:manage');
 
 -- 用户名：admin
 -- 密码：Admin@123456

@@ -1,6 +1,7 @@
 package com.gusl.gojjudge.sercice.impl;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.gusl.common.constant.JudgeQueueConstant;
 import com.gusl.common.constant.JudgeTaskStatus;
 import com.gusl.common.constant.JudgeTaskType;
 import com.gusl.common.pojo.entity.JudgeTask;
@@ -40,6 +41,8 @@ public class JudgeTaskProcessor {
      */
     @Value("${goj.judge.task.processing-timeout-minutes:10}")
     private long processingTimeoutMinutes;
+
+
 
     /**
      * 领取任务
@@ -123,6 +126,12 @@ public class JudgeTaskProcessor {
      * @param message 测评任务消息
      */
     private void executeBusinessTask(JudgeTaskMessage message) {
+
+        if(JudgeTaskType.CONTEST_SUBMISSION.equals(message.getTaskType())){
+            judgeService.judgeContestSubmission(message.getBusinessId());
+            return;
+        }
+
         if (JudgeTaskType.SUBMISSION.equals(message.getTaskType())) {
             judgeService.judgeSubmission(message.getBusinessId());
             return;

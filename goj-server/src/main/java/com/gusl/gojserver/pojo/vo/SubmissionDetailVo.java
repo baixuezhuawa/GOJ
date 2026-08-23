@@ -23,6 +23,12 @@ public class SubmissionDetailVo {
     @Schema(description = "语言")
     private String language;
 
+    @Schema(description = "问题名称")
+    private String problemName;
+
+    @Schema(description = "问题id")
+    private Long problemId;
+
     @Schema(description = "源代码")
     private String sourceCode;
 

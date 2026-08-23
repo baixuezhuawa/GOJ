@@ -2,16 +2,12 @@ package com.gusl.gojserver.pojo.vo;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
 @Data
-@AllArgsConstructor
-@NoArgsConstructor
-public class SubmissionListVo {
+public class ContestSubmissionListVo {
 
     @Schema(description = "提交id")
     private Long id;
@@ -19,11 +15,11 @@ public class SubmissionListVo {
     @Schema(description = "作者")
     private String username;
 
-    @Schema(description = "问题名称")
-    private String problemName;
+    @Schema(description = "题目名称")
+    private String displayName;
 
-    @Schema(description = "问题id")
-    private Long problemId;
+    @Schema(description = "题目编号")
+    private String displayCode;
 
     @Schema(description = "执行耗时")
     private Integer timeMs;

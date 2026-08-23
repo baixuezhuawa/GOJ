@@ -3,18 +3,13 @@ package com.gusl.gojjudge.sercice.impl;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.gusl.common.common.BaseException;
 import com.gusl.common.constant.*;
-import com.gusl.common.pojo.entity.Problem;
-import com.gusl.common.pojo.entity.ProblemReviewSubmission;
-import com.gusl.common.pojo.entity.ProblemTestData;
-import com.gusl.common.pojo.entity.Submission;
+import com.gusl.common.pojo.entity.*;
 import com.gusl.gojjudge.adapter.AbstractLanguageAdapter;
 import com.gusl.gojjudge.client.GoJudgeClient;
 import com.gusl.gojjudge.exception.*;
-import com.gusl.gojjudge.mapper.ProblemMapper;
-import com.gusl.gojjudge.mapper.ProblemReviewSubmissionMapper;
-import com.gusl.gojjudge.mapper.ProblemTestDataMapper;
-import com.gusl.gojjudge.mapper.SubmissionMapper;
+import com.gusl.gojjudge.mapper.*;
 import com.gusl.gojjudge.pojo.entity.*;
 import com.gusl.gojjudge.sercice.JudgeService;
 import com.gusl.gojjudge.sercice.SubmissionResultService;
@@ -28,7 +23,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -43,7 +37,6 @@ import java.util.function.Supplier;
 @Service
 @RequiredArgsConstructor
 public class JudgeServiceImpl implements JudgeService {
-
     @Value("${goj.judge.data-root}")
     private String dataRoot;
 
@@ -69,10 +62,16 @@ public class JudgeServiceImpl implements JudgeService {
      */
     private final ProblemMapper problemMapper;
 
+    /** 比赛提交记录 Mapper */
+    private final ContestSubmissionMapper contestSubmissionMapper;
+
     /**
      * 测试数据 Mapper，用于读取题目的测试点数量。
      */
     private final ProblemTestDataMapper problemTestDataMapper;
+
+    /** 比赛问题 Mapper, 用于读取比赛题目基本信息 */
+    private final ContestProblemMapper contestProblemMapper;
 
     /**
      * go-judge HTTP 客户端；所有编译和运行请求都通过它进入沙箱。
@@ -125,9 +124,57 @@ public class JudgeServiceImpl implements JudgeService {
                 submission.getLanguage(),
                 submission.getSourceCode(),
                 () -> loadPublishedMaterial(submission.getProblemId()),
-                outcome -> submissionResultService.updateSubmission(submission, outcome)
+                outcome -> submissionResultService.updateSubmission(
+                        submission,
+                        outcome
+                )
         );
     }
+
+
+    /**
+     * 领取并执行比赛提交
+     */
+    @Override
+    public void judgeContestSubmission(Long submissionId) {
+        ContestSubmission contestSubmission = contestSubmissionMapper.selectById(submissionId);
+
+        if(contestSubmission == null) {
+            throw new SystemErrorException("该比赛提交不存在: " + submissionId);
+        }
+
+        // 业务结果已经落库，说明可能只差 judge_task 的成功状态。
+        if (JudgingConstant.TERMINAL_STATUSES.contains(contestSubmission.getStatus())) {
+            log.info("比赛提交已经完成，无需重复测评，{}", submissionId);
+            return;
+        }
+
+        // judge_task 已经完成原子领取，这里只更新业务展示状态。
+        contestSubmissionMapper.update(
+                Wrappers.<ContestSubmission>lambdaUpdate()
+                        .set(ContestSubmission::getStatus, JudgingConstant.WAIT)
+                        .set(
+                                contestSubmission.getJudgeStartTime() == null,
+                                ContestSubmission::getJudgeStartTime,
+                                LocalDateTime.now()
+                        )
+                        .eq(ContestSubmission::getId, submissionId)
+        );
+
+
+        // 把明确的比赛提交数据交给公共测评流程。
+        executeJudge(
+                "普通提交 " + submissionId,
+                contestSubmission.getLanguage(),
+                contestSubmission.getSourceCode(),
+                () -> loadContestProblemMaterial(contestSubmission.getProblemId()),
+                outcome -> submissionResultService.updateSubmission(
+                        contestSubmission,
+                        outcome
+                )
+        );
+    }
+
 
     /**
      * 领取并执行管理员验题提交。
@@ -364,6 +411,32 @@ public class JudgeServiceImpl implements JudgeService {
         if (testData == null) {
             throw new SystemErrorException("无法加载正式测试数据");
         }
+        return new JudgeMaterial(problem, testData);
+    }
+
+
+    private JudgeMaterial loadContestProblemMaterial(Long problemId){
+
+        ContestProblem contestProblem = contestProblemMapper.selectOne(
+                Wrappers.<ContestProblem> lambdaQuery()
+                        .eq(ContestProblem::getProblemId, problemId)
+                        .eq(ContestProblem::getReleaseStatus, ContestProblemStatus.OPENING)
+        );
+
+        if (contestProblem == null){
+            throw new BaseException("该比赛题目不存在/未启用");
+        }
+
+        Problem problem = problemMapper.selectOne(
+                Wrappers.<Problem> lambdaQuery()
+                        .eq(Problem::getId, problemId)
+        );
+
+        ProblemTestData testData = problemTestDataMapper.selectById(contestProblem.getTestDataId());
+        if(testData == null) {
+            throw new SystemErrorException("无法加载待比赛题目测试数据 problem:" + problemId);
+        }
+
         return new JudgeMaterial(problem, testData);
     }
 

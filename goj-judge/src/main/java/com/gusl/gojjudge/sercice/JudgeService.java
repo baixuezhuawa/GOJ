@@ -39,4 +39,10 @@ public interface JudgeService {
      * @param errorMessage 系统错误信息
      */
     void markSystemError(String taskType, Long businessId, String errorMessage);
+
+    /**
+     * 支持比赛提交的测评任务
+     * @param businessId contestSubmissionId
+     */
+    void judgeContestSubmission(Long businessId);
 }

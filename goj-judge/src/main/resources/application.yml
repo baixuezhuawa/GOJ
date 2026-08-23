@@ -1,5 +1,8 @@
 goj:
   judge:
+    dispatch:
+      slot-max-wait-time-ms: 100
+      scan-interval: 2
     worker-name: worker-01  # 测评机代号
     data-root: D:\ProgramData\goj-data  # 数据根目录
     sandbox-base-url: http://192.168.100.128:5050  # 沙箱地址

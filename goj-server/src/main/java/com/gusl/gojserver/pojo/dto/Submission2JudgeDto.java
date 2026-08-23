@@ -1,10 +1,14 @@
 package com.gusl.gojserver.pojo.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Schema(name = "提交Dto")
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class Submission2JudgeDto {
 
     @Schema(description = "题目id", example = "1")

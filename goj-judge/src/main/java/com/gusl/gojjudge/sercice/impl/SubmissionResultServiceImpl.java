@@ -4,7 +4,9 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.gusl.common.constant.JudgingConstant;
 import com.gusl.common.constant.SystemConstant;
+import com.gusl.common.pojo.entity.ContestSubmission;
 import com.gusl.common.pojo.entity.Submission;
+import com.gusl.gojjudge.mapper.ContestSubmissionMapper;
 import com.gusl.gojjudge.mapper.SubmissionMapper;
 import com.gusl.gojjudge.pojo.entity.JudgeOutcome;
 import com.gusl.gojjudge.pojo.entity.SubmissionFinalizedContext;
@@ -25,6 +27,8 @@ import java.util.List;
 public class SubmissionResultServiceImpl implements SubmissionResultService {
 
     private final SubmissionMapper submissionMapper;
+
+    private final ContestSubmissionMapper contestSubmissionMapper;
 
     /** 所有更新器 */
     private final List<SubmissionFinalizedUpdater> submissionFinalizedUpdaters;
@@ -81,5 +85,39 @@ public class SubmissionResultServiceImpl implements SubmissionResultService {
             updater.update(context);
         }
 
+    }
+
+    /**
+     * 写回当前测评结果，比赛提交第一次进入终态时同步更新全部派生统计。
+     *
+     * @param contestSubmission 当前比赛提交
+     * @param outcome 当前测评结果
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void updateSubmission(ContestSubmission contestSubmission, JudgeOutcome outcome) {
+        boolean terminal = JudgingConstant.TERMINAL_STATUSES.contains(contestSubmission.getStatus());
+
+        LocalDateTime judgeEndTime = terminal ? LocalDateTime.now() : null;
+
+        // 构造提交状态和测评结果的统一更新条件。
+        LambdaUpdateWrapper<ContestSubmission> updateWrapper = Wrappers.<ContestSubmission>lambdaUpdate()
+                .set(ContestSubmission::getStatus, outcome.getCurStatus())
+                .set(outcome.getTimeMs() != null, ContestSubmission::getTimeMs, outcome.getTimeMs())
+                .set(outcome.getMemoryKb() != null, ContestSubmission::getMemoryKb, outcome.getMemoryKb())
+                .set(outcome.getCompilerMsg() != null, ContestSubmission::getCompilerMsg, outcome.getCompilerMsg())
+                .set(outcome.getJudgeMsg() != null, ContestSubmission::getJudgeMsg, outcome.getJudgeMsg())
+                .set(outcome.getScore() != null, ContestSubmission::getScore, outcome.getScore())
+                .set(terminal, ContestSubmission::getJudgeEndTime, judgeEndTime)
+                .eq(ContestSubmission::getId, contestSubmission.getId())
+                .notIn(ContestSubmission::getStatus, JudgingConstant.TERMINAL_STATUSES); // 判断非终态
+
+        // 任何后续写回都不能覆盖终态，终态重复消费也不会再次累加统计。
+        int affectedRows = contestSubmissionMapper.update(updateWrapper);
+        if (!terminal || affectedRows != 1) {
+            return;
+        }
+
+        // 对于比赛应该还有其他表需要更新.
     }
 }

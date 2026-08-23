@@ -8,8 +8,7 @@ import com.gusl.gojserver.pojo.entity.LoginUser;
 import com.gusl.common.pojo.entity.Submission;
 import com.gusl.gojserver.pojo.vo.SubmissionDetailVo;
 import com.gusl.gojserver.pojo.vo.SubmissionListVo;
-
-import java.util.List;
+import com.gusl.gojserver.pojo.vo.SubmissionVo;
 
 public interface SubmissionService extends IService<Submission> {
 
@@ -17,7 +16,7 @@ public interface SubmissionService extends IService<Submission> {
      * 将用户的提交, 提交到测评机
      * @param submission2JudgeDto 提交信息
      */
-    Long submitProblemToJudge(Submission2JudgeDto submission2JudgeDto, LoginUser loginUser);
+    SubmissionVo submitProblemToJudge(Submission2JudgeDto submission2JudgeDto, LoginUser loginUser);
 
     /**
      * 获取测评详细信息
@@ -34,5 +33,4 @@ public interface SubmissionService extends IService<Submission> {
      * 获取最近几次提交
      */
     PageResult<SubmissionListVo> getMyRecentSubmission(LoginUser loginUser);
-
 }
