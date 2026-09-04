@@ -10,15 +10,9 @@ import com.gusl.common.common.BaseException;
 import com.gusl.common.common.PageQuery;
 import com.gusl.common.common.PageResult;
 import com.gusl.common.constant.*;
-import com.gusl.common.pojo.entity.Contest;
-import com.gusl.common.pojo.entity.ContestProblem;
-import com.gusl.common.pojo.entity.ContestSubmission;
-import com.gusl.common.pojo.entity.JudgeTask;
+import com.gusl.common.pojo.entity.*;
 import com.gusl.gojserver.config.properties.SysProperties;
-import com.gusl.gojserver.mapper.ContestMapper;
-import com.gusl.gojserver.mapper.ContestProblemMapper;
-import com.gusl.gojserver.mapper.ContestSubmissionMapper;
-import com.gusl.gojserver.mapper.JudgeTaskMapper;
+import com.gusl.gojserver.mapper.*;
 import com.gusl.gojserver.pojo.dto.ContestSubmission2JudgeDto;
 import com.gusl.gojserver.pojo.dto.Submission2JudgeDto;
 import com.gusl.gojserver.pojo.entity.LoginUser;
@@ -49,6 +43,8 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<ContestSubmissionM
 
     private final JudgeTaskMapper judgeTaskMapper;
 
+    private final ContestParticipateMapper contestParticipateMapper;
+
     private final SubmissionService submissionService;
 
 
@@ -75,6 +71,17 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<ContestSubmissionM
             ContestSubmission2JudgeDto dto,
             LoginUser loginUser
     ) {
+        // 判断用户是否报名
+        Long isParticipate = contestParticipateMapper.selectCount(
+                Wrappers.<ContestParticipate>lambdaQuery()
+                        .eq(ContestParticipate::getContestId, contestId)
+                        .eq(ContestParticipate::getUserId, loginUser.getUserId())
+        );
+
+        if (isParticipate != 1){
+            throw new BaseException("未报名不允许提交");
+        }
+
         // 判断问题是否存在
         ContestProblem contestProblem = contestProblemMapper.selectOne(
                 Wrappers.<ContestProblem>lambdaQuery()
@@ -121,7 +128,7 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<ContestSubmissionM
      * 获取我的比赛提交列表
      */
     @Override
-    public PageResult<ContestSubmissionListVo> getContestSubmissionList(
+    public PageResult<ContestSubmissionListVo> getMyContestSubmissionList(
             Long contestId,
             PageQuery pageQuery,
             LoginUser loginUser
@@ -131,6 +138,8 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<ContestSubmissionM
         Page<ContestSubmission> contestSubmissionPage = contestSubmissionMapper.selectPage(
                 page,
                 Wrappers.<ContestSubmission>lambdaQuery()
+                        .eq(ContestSubmission::getUserId, loginUser.getUserId())
+                        .eq(ContestSubmission::getContestId, contestId)
                         .eq(ContestSubmission::getUserId, loginUser.getUserId())
                         .orderByDesc(ContestSubmission::getId)
         );
@@ -249,6 +258,7 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<ContestSubmissionM
                 .sourceSha256(sha256)
                 .sourceCode(dto.getSourceCode())
                 .language(dto.getLanguage())
+                .version(1)
                 .build();
         contestSubmissionMapper.insert(submission);
 

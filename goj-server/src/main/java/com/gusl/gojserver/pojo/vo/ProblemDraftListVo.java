@@ -8,10 +8,10 @@ import java.time.LocalDateTime;
 
 @Data
 @Schema(name = "简单题目草稿信息")
-public class ProblemDraftInfoVo {
+public class ProblemDraftListVo {
 
     @Schema(description = "问题id")
-    private Long problemId;
+    private Long id;
 
     @Schema(description = "问题名称")
     private String problemName;
@@ -20,6 +20,6 @@ public class ProblemDraftInfoVo {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createTime;
 
-    @Schema(description = "审核状态")
-    private String status;
+    @Schema(description = "题目状态：0 草稿，1 已发布，2 已停用，3 待审核，4 已退回，5 准备中")
+    private Integer status;
 }

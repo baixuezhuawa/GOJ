@@ -29,6 +29,13 @@ goj:
         enabled: true
         display-name: Python 3
 
+  contest:
+    rank-cache:
+      running-ttl-seconds: 3
+      waiting-ttl-seconds: 3
+      finish-ttl-seconds: 8640
+
+
 server:
   port: 8080
 

@@ -26,6 +26,7 @@ import com.gusl.gojserver.service.support.PageFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -50,6 +51,31 @@ public class ContestServiceImpl extends ServiceImpl<ContestMapper, Contest> impl
     private final ContestParticipateMapper participateMapper;
 
 
+
+    /** 删除比赛题目 */
+    @Override
+    public void deleteContestProblem(Long contestId, Long problemId) {
+        int delete = contestProblemMapper.delete(
+                Wrappers.<ContestProblem>lambdaQuery()
+                        .eq(ContestProblem::getContestId, contestId)
+                        .eq(ContestProblem::getProblemId, problemId)
+        );
+        if (delete != 1){
+            log.info("contest:{} -> problemId:{} 删除失败", contestId, problemId);
+        }
+        log.info("contest:{} -> problemId:{} 删除成功", contestId, problemId);
+    }
+
+    /** 删除比赛 */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void deleteContest(Long contestId) {
+        contestMapper.deleteById(contestId);
+        contestProblemMapper.delete(
+                Wrappers.<ContestProblem> lambdaQuery()
+                        .eq(ContestProblem::getContestId, contestId)
+        );
+    }
 
     /**
      * 推送比赛上线
@@ -81,7 +107,7 @@ public class ContestServiceImpl extends ServiceImpl<ContestMapper, Contest> impl
         Page<Contest> contestPage = contestMapper.selectPage(
                 page,
                 Wrappers.<Contest>lambdaQuery()
-                        .in(Contest::getStatus, ContestStatus.DRAFT, ContestStatus.SCHEDULED, ContestStatus.RUNNING)
+                        .in(Contest::getStatus, ContestStatus.SCHEDULED, ContestStatus.RUNNING)
                         .ge(Contest::getEndTime, LocalDateTime.now())
                         .orderByAsc(Contest::getId)
         );
@@ -187,6 +213,7 @@ public class ContestServiceImpl extends ServiceImpl<ContestMapper, Contest> impl
         vo.setTitle(contest.getTitle());
         vo.setDescription(contest.getDescription());
         vo.setRemainingSeconds(remain);
+        vo.setStatus(contest.getStatus());
 
         List<ContestProblem> contestProblems = contestProblemMapper.selectList(
                 Wrappers.<ContestProblem>lambdaQuery()
@@ -206,10 +233,9 @@ public class ContestServiceImpl extends ServiceImpl<ContestMapper, Contest> impl
 
     /**
      * 创建比赛草稿
-     * @param dto 比赛草稿
      */
     @Override
-    public void createContestDraft(ContestDto dto) {
+    public Long createContestDraft(ContestDto dto) {
         if (
                 dto.getRegisterStartTime().isAfter(dto.getRegisterEndTime()) ||
                 dto.getStartTime().isAfter(dto.getEndTime()) ||
@@ -223,6 +249,7 @@ public class ContestServiceImpl extends ServiceImpl<ContestMapper, Contest> impl
 
         contestMapper.insert(contest);
         log.info("添加比赛成功 {}:{}", contest.getId(), contest.getTitle());
+        return contest.getId();
     }
 
 

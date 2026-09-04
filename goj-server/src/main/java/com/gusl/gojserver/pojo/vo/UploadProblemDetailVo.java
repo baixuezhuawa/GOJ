@@ -1,26 +1,16 @@
-package com.gusl.common.pojo.entity;
+package com.gusl.gojserver.pojo.vo;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
-import com.gusl.common.common.BaseEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 
-/**
- * 题目实体，保存题面、限制、难度和发布状态。
- *
- * <p>公开样例保留在题目表中；隐藏测试数据由 {@code problem_test_data}
- * 及其文件目录管理，避免普通题目详情接口直接返回测试数据。</p>
- */
-@Tag(name = "题目实体")
-@EqualsAndHashCode(callSuper = true)
+import java.util.List;
+
+
 @Data
-@TableName("problem")
-public class Problem extends BaseEntity {
+public class UploadProblemDetailVo {
 
     /** 主键 id。 */
     @TableId(value = "id", type = IdType.AUTO)
@@ -65,16 +55,24 @@ public class Problem extends BaseEntity {
     @Schema(description = "样例说明")
     private String exampleNote;
 
-    /** 题目难度分。 */
-    @Schema(description = "难度分")
-    private Integer difficulty;
 
-    /** 出题人用户 id。 */
-    @Schema(description = "出题人用户 id")
-    private Long authorId;
-
-    /** 题目状态：0 草稿，1 已发布，2 已停用，3 待审核，4 已退回，5 准备中。 */
-    @Schema(description = "题目状态：0 草稿，1 已发布，2 已停用，3 待审核，4 已退回，5 准备中")
+    /** 题目状态：0 草稿，1 已发布，2 已停用，3 待审核，4 已退回。 */
+    @Schema(description = "题目状态：0 草稿，1 已发布，2 已停用，3 待审核，4 已退回, 5 准备中")
     private Integer status;
+
+
+    /** 备注信息 */
+    @Schema(description = "管理员评审备注信息")
+    private String remark;
+
+    /**
+     * 管理员可以直接修改标签, 所以需要标签id
+     */
+    @Schema(description = "标签集合")
+    private List<ProblemTagsVo> tags;
+
+
+    @Schema(description = "测试数据集合")
+    private List<ProblemTestDataListVo> testDataInfoList;
 
 }

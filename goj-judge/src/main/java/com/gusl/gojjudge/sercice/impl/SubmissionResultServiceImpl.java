@@ -96,7 +96,7 @@ public class SubmissionResultServiceImpl implements SubmissionResultService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void updateSubmission(ContestSubmission contestSubmission, JudgeOutcome outcome) {
-        boolean terminal = JudgingConstant.TERMINAL_STATUSES.contains(contestSubmission.getStatus());
+        boolean terminal = JudgingConstant.TERMINAL_STATUSES.contains(outcome.getCurStatus());
 
         LocalDateTime judgeEndTime = terminal ? LocalDateTime.now() : null;
 
@@ -119,5 +119,6 @@ public class SubmissionResultServiceImpl implements SubmissionResultService {
         }
 
         // 对于比赛应该还有其他表需要更新.
+
     }
 }

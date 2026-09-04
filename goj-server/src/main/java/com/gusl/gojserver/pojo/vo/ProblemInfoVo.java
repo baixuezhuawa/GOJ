@@ -12,6 +12,9 @@ import java.util.List;
 @Data
 public class ProblemInfoVo extends Problem {
 
+    @Schema(description = "作者名称")
+    private String authorName;
+
     @Schema(description = "题目标签")
     private List<String> tags;
 

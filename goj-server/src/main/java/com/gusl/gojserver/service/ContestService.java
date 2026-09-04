@@ -10,11 +10,10 @@ import com.gusl.gojserver.pojo.entity.LoginUser;
 import com.gusl.gojserver.pojo.vo.ContestDetailVo;
 import com.gusl.gojserver.pojo.vo.ContestListVo;
 import com.gusl.gojserver.pojo.vo.ContestProblemDetailVo;
-import jakarta.validation.Valid;
 
 public interface ContestService extends IService<Contest> {
 
-    void createContestDraft(ContestDto contestDto);
+    Long createContestDraft(ContestDto contestDto);
 
     void addProblem2Contest(AddProblem2ContestDto vo);
 
@@ -29,4 +28,9 @@ public interface ContestService extends IService<Contest> {
     void updateContestInfo(Long contestId, ContestDto dto);
 
     ContestProblemDetailVo getContestProblemDetail(Long contestId, String problemCode);
+
+    void deleteContestProblem(Long contestId, Long problemId);
+
+    void deleteContest(Long contestId);
+
 }

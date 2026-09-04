@@ -4,7 +4,7 @@ import com.gusl.common.common.BaseController;
 import com.gusl.common.common.PageQuery;
 import com.gusl.common.common.PageResult;
 import com.gusl.common.common.Result;
-import com.gusl.common.pojo.entity.JudgeTask;
+import com.gusl.gojserver.pojo.vo.JudgeTaskDetailVo;
 import com.gusl.gojserver.pojo.vo.JudgeTaskListVo;
 import com.gusl.gojserver.service.JudgeTaskService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -16,8 +16,8 @@ import org.springframework.web.bind.annotation.*;
 /**
  * 测评任务管理接口，供管理员查询任务和发起死亡任务重测。
  */
-@Tag(name = "测评任务管理")
-@PreAuthorize("hasAuthority('submission:manage')")
+@Tag(name = "管理员-测评任务管理")
+@PreAuthorize("hasRole('SUPER_ADMIN')")
 @RequiredArgsConstructor
 @RestController
 @RequestMapping("/admin/judge-task")
@@ -38,7 +38,7 @@ public class AdminJudgeTaskController extends BaseController {
     @Operation(summary = "任务详情")
     @GetMapping("/{taskId}")
     public Result getJudgeTaskById(@PathVariable Long taskId){
-        JudgeTask judgeTask = judgeTaskService.getById(taskId);
+        JudgeTaskDetailVo judgeTask = judgeTaskService.getJudgeTaskDetailById(taskId);
         return success("操作成功", judgeTask);
     }
 

@@ -46,16 +46,12 @@ public class UserDetailsServiceImpl implements UserDetailsService {
             throw new BaseException("该账号已被禁用");
         }
 
-        Set<String> permissions;
+        Set<String> authorities = permissionMapper.getPermissionCodesByUserId(user.getId());
 
-        // 如果是超级管理员, 则获取全部权限
         Set<String> roles = roleMapper.getRoleCodeByUserId(user.getId());
 
-        if(roles.contains("SUPER_ADMIN")) {
-            permissions = permissionMapper.getAllPermission();
-        }else {
-            permissions = permissionMapper.getPermissionCodesByUserId(user.getId());
-        }
-        return new LoginUser(user, permissions);
+        roles.stream().map(role -> "ROLE_" + role).forEach(authorities::add);
+
+        return new LoginUser(user, authorities);
     }
 }

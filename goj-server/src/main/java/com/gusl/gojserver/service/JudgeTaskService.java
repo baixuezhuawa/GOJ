@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.extension.service.IService;
 import com.gusl.common.common.PageQuery;
 import com.gusl.common.common.PageResult;
 import com.gusl.common.pojo.entity.JudgeTask;
+import com.gusl.gojserver.pojo.vo.JudgeTaskDetailVo;
 import com.gusl.gojserver.pojo.vo.JudgeTaskListVo;
 
 public interface JudgeTaskService extends IService<JudgeTask> {
@@ -23,4 +24,8 @@ public interface JudgeTaskService extends IService<JudgeTask> {
      * @return 新创建的任务 id
      */
     Long retryDeadTask(Long taskId);
+
+
+    /** 获取任务详情*/
+    JudgeTaskDetailVo getJudgeTaskDetailById(Long taskId);
 }

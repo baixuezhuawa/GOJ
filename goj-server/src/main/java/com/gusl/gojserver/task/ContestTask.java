@@ -56,20 +56,37 @@ public class ContestTask {
         }
     }
 
+
+
+
+
     /**
-     * 比赛结束, 进入等待阶段, 用于等待剩余比赛测评测评结束
+     * 比赛彻底结束
      */
     @Scheduled(fixedDelayString = "4990")
     public void ending(){
         LocalDateTime now = LocalDateTime.now();
-        int update = contestMapper.update(
-                Wrappers.<Contest>lambdaUpdate()
-                        .set(Contest::getStatus, ContestStatus.WAITING)
+        // 先关闭题目, 再关闭比赛.
+        List<Contest> contests = contestMapper.selectList(
+                Wrappers.<Contest> lambdaQuery()
                         .eq(Contest::getStatus, ContestStatus.RUNNING)
                         .le(Contest::getEndTime, now)
         );
-        if(update >= 1){
-            log.info("{}场比赛结束", update);
+
+        for(Contest contest : contests){
+            // 先公开题目
+            contestProblemMapper.update(
+                    Wrappers.<ContestProblem> lambdaUpdate()
+                            .set(ContestProblem::getReleaseStatus, ContestProblemStatus.PUBLISH)
+                            .eq(ContestProblem::getContestId, contest.getId())
+            );
+
+            // 更新比赛状态为结束
+            contestMapper.update(
+                    Wrappers.<Contest>lambdaUpdate()
+                            .set(Contest::getStatus, ContestStatus.FINISH)
+                            .eq(Contest::getId, contest.getId())
+            );
         }
     }
 

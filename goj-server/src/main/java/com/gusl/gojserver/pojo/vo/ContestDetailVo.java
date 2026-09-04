@@ -2,6 +2,7 @@ package com.gusl.gojserver.pojo.vo;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 
@@ -22,4 +23,7 @@ public class ContestDetailVo {
 
     @Schema(description = "比赛描述")
     private String description;
+
+    @Schema(description = "比赛状态")
+    private String status;
 }

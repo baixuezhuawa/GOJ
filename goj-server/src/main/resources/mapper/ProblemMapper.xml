@@ -19,21 +19,23 @@
 
     <select id="selectProblemPage" resultType="com.gusl.gojserver.pojo.vo.ProblemPageListVo">
         SELECT
-        p.id AS problemId,
-        p.problem_name AS problemName,
-        p.difficulty,
-        CASE
-        WHEN #{userId} IS NULL THEN 'UNATTEMPTED'
-        ELSE COALESCE(upp.status, 'UNATTEMPTED')
-        END AS status
+            p.id AS problemId,
+            p.problem_name AS problemName,
+            p.difficulty,
+            CASE
+                WHEN upp.id IS NULL THEN 'UNATTEMPTED'
+                ELSE upp.status
+            END AS status
         FROM problem p
-        LEFT JOIN user_problem_progress upp ON upp.problem_id = p.id AND upp.user_id = #{userId}
+        LEFT JOIN user_problem_progress upp
+            ON upp.problem_id = p.id
+            AND upp.user_id = #{userId}
         WHERE p.status = #{publishStatus}
 
         <if test="dto.keyword != null and dto.keyword != ''">
             AND (
-            p.problem_name LIKE CONCAT('%', #{dto.keyword}, '%')
-            OR CAST(p.id AS CHAR) = #{dto.keyword}
+                p.problem_name LIKE CONCAT('%', #{dto.keyword}, '%')
+                OR CAST(p.id AS CHAR) = #{dto.keyword}
             )
         </if>
 
@@ -45,14 +47,87 @@
             AND p.difficulty &lt;= #{dto.difficultyMax}
         </if>
 
+        <if test="dto.tagId != null and dto.tagId.size() > 0">
+            AND EXISTS (
+                SELECT 1
+                FROM problem_tag pt_filter
+                WHERE pt_filter.problem_id = p.id
+                  AND pt_filter.tag_id IN
+                <foreach collection="dto.tagId" item="tagId" open="(" separator="," close=")">
+                    #{tagId}
+                </foreach>
+            )
+        </if>
+
         <if test="userId != null and dto.solveStatus != null and dto.solveStatus != ''">
-            AND (
-                    (#{dto.solveStatus} = 'UNATTEMPTED' AND upp.id IS NULL)
-                OR
-                    (#{dto.solveStatus} != 'UNATTEMPTED' AND upp.status = #{dto.solveStatus})
-                )
+            <choose>
+                <when test="dto.solveStatus == 'UNATTEMPTED'">
+                    AND upp.id IS NULL
+                </when>
+                <otherwise>
+                    AND upp.status = #{dto.solveStatus}
+                </otherwise>
+            </choose>
         </if>
 
         ORDER BY p.id ASC
     </select>
+
+    <select id="selectProblemPageByAdmin" resultType="com.gusl.gojserver.pojo.vo.AdminProblemPageListVo">
+        SELECT
+            p.id AS problemId,
+            p.problem_name AS problemName,
+            p.difficulty,
+            CASE
+                WHEN upp.id IS NULL THEN 'UNATTEMPTED'
+                ELSE upp.status
+            END AS status,
+            p.status AS problemStatus
+        FROM problem p
+        LEFT JOIN user_problem_progress upp
+            ON upp.problem_id = p.id
+            AND upp.user_id = #{userId}
+        WHERE 1 = 1
+
+        <if test="dto.keyword != null and dto.keyword != ''">
+            AND (
+                p.problem_name LIKE CONCAT('%', #{dto.keyword}, '%')
+                OR CAST(p.id AS CHAR) = #{dto.keyword}
+            )
+        </if>
+
+        <if test="dto.difficultyMin != null">
+            AND p.difficulty &gt;= #{dto.difficultyMin}
+        </if>
+
+        <if test="dto.difficultyMax != null">
+            AND p.difficulty &lt;= #{dto.difficultyMax}
+        </if>
+
+        <if test="dto.tagId != null and dto.tagId.size() > 0">
+            AND EXISTS (
+                SELECT 1
+                FROM problem_tag pt_filter
+                WHERE pt_filter.problem_id = p.id
+                  AND pt_filter.tag_id IN
+                <foreach collection="dto.tagId" item="tagId" open="(" separator="," close=")">
+                    #{tagId}
+                </foreach>
+            )
+        </if>
+
+        <if test="userId != null and dto.solveStatus != null and dto.solveStatus != ''">
+            <choose>
+                <when test="dto.solveStatus == 'UNATTEMPTED'">
+                    AND upp.id IS NULL
+                </when>
+                <otherwise>
+                    AND upp.status = #{dto.solveStatus}
+                </otherwise>
+            </choose>
+        </if>
+
+        ORDER BY p.id ASC
+    </select>
+
 </mapper>

@@ -25,6 +25,9 @@ public class SubmissionListVo {
     @Schema(description = "问题id")
     private Long problemId;
 
+    @Schema(description = "语言")
+    private String language;
+
     @Schema(description = "执行耗时")
     private Integer timeMs;
 

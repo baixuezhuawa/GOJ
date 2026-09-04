@@ -19,10 +19,10 @@ import org.springframework.web.bind.annotation.*;
  * 管理员题目审核接口。
  */
 @Tag(name = "管理员-题目审核")
+@PreAuthorize("hasRole('SUPER_ADMIN')")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/admin/problem-draft-review")
-@PreAuthorize("hasAuthority('problem:manage')")
 public class AdminProblemReviewController extends BaseController {
 
     private final ProblemReviewService problemReviewService;
@@ -91,4 +91,6 @@ public class AdminProblemReviewController extends BaseController {
         problemReviewService.reject(problemId, dto.getRemark());
         return success("题目已驳回");
     }
+
+
 }

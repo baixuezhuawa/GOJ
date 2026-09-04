@@ -11,7 +11,6 @@ public class ContestSubmission2JudgeDto {
     private String language;
 
     @NotBlank(message = "提交代码不能为空")
-    @Max(value = 4000, message = "最大长度超出限制")
     private String sourceCode;
 
 }

@@ -119,7 +119,7 @@ CREATE TABLE `problem`
     `difficulty`         INT UNSIGNED     NOT NULL DEFAULT 0 COMMENT '题目难度分',
     `author_id`          BIGINT           NOT NULL COMMENT '出题人用户 id',
     `status`             TINYINT UNSIGNED NOT NULL DEFAULT 0
-        COMMENT '题目状态：0 草稿，1 已发布，2 已停用，3 待审核，4 已退回',
+        COMMENT '题目状态：0 草稿，1 已发布，2 已停用，3 待审核，4 已退回，5 准备中',
 
     `create_by`          VARCHAR(64)               DEFAULT NULL COMMENT '创建人',
     `create_time`        DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

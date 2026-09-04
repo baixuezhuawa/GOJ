@@ -33,7 +33,6 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -99,7 +98,8 @@ public class ProblemReviewServiceImpl implements ProblemReviewService {
 
                 Path source = Path.of(sysProperties.getDataRoot(), testData.getStoragePath());
 
-                Path destination = resolveOfficialDataRoot()
+                Path destination = Path.of(sysProperties.getDataRoot())
+                        .resolve("testData")
                         .resolve("p" + problemId)
                         .resolve("v" + version);
 
@@ -135,7 +135,8 @@ public class ProblemReviewServiceImpl implements ProblemReviewService {
 
                 int problemRows = problemMapper.update(
                         Wrappers.<Problem>lambdaUpdate()
-                                .set(Problem::getStatus, ProblemStatus.PUBLISH)
+                                // 修改为准备阶段, 后续题目一些状态可以由作者自行定夺
+                                .set(Problem::getStatus, ProblemStatus.PREPARE)
                                 .set(Problem::getRemark, null)
                                 .eq(Problem::getId, problem.getId())
                                 .eq(Problem::getStatus, ProblemStatus.PENDING)
@@ -258,15 +259,4 @@ public class ProblemReviewServiceImpl implements ProblemReviewService {
         }
     }
 
-
-
-    private Path resolveDataRoot() {
-        return Path.of(sysProperties.getDataRoot()).toAbsolutePath().normalize();
-    }
-
-
-
-    private Path resolveOfficialDataRoot() {
-        return resolveDataRoot().resolve("testData").normalize();
-    }
 }

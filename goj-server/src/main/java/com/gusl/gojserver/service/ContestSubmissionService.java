@@ -27,7 +27,7 @@ public interface ContestSubmissionService extends IService<ContestSubmission> {
      * 获取赛时提交列表
      * @return ContestSubmissionListVo
      */
-    PageResult<ContestSubmissionListVo> getContestSubmissionList(
+    PageResult<ContestSubmissionListVo> getMyContestSubmissionList(
             Long contestId,
             PageQuery query,
             LoginUser loginUser

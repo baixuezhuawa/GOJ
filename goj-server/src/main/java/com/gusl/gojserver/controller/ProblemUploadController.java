@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -21,6 +22,7 @@ import java.io.IOException;
  */
 @Tag(name = "题目上传")
 @RequiredArgsConstructor
+@PreAuthorize("isAuthenticated()") // 必须登录
 @RestController
 @RequestMapping("/upload")
 public class ProblemUploadController extends BaseController {
@@ -39,8 +41,8 @@ public class ProblemUploadController extends BaseController {
             @RequestPart("file") MultipartFile data,
             @AuthenticationPrincipal LoginUser user
     ) throws IOException {
-        problemService.uploadProblemByUser(draftDto, data, user);
-        return success("题目已提交审核");
+        Long problemId = problemService.uploadProblemByUser(draftDto, data, user);
+        return success("题目已提交审核", problemId);
     }
 
     @Operation(summary = "更新被驳回题目的测试数据")

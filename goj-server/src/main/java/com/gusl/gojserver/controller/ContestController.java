@@ -10,11 +10,11 @@ import com.gusl.gojserver.pojo.vo.*;
 import com.gusl.gojserver.service.ContestParticipateService;
 import com.gusl.gojserver.service.ContestService;
 import com.gusl.gojserver.service.ContestSubmissionService;
+import com.gusl.gojserver.service.impl.ContestRankService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
-import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -34,6 +34,8 @@ public class ContestController extends BaseController {
     private final ContestParticipateService contestParticipateService;
 
     private final ContestSubmissionService contestSubmissionService;
+
+    private final ContestRankService contestRankService;
 
 
 
@@ -106,6 +108,7 @@ public class ContestController extends BaseController {
 
 
 
+    @PreAuthorize("isAuthenticated()") // 必须登录
     @Operation(summary = "提交")
     @PostMapping("/{contestId}/problem/{problemCode}")
     public Result submitContestProblem(
@@ -125,15 +128,15 @@ public class ContestController extends BaseController {
 
 
 
-    @Operation(summary = "获取比赛提交列表")
+    @Operation(summary = "获取我的比赛提交列表")
     @GetMapping("/{contestId}/submission/list")
-    public Result getContestSubmissionList(
+    public Result getMyContestSubmissionList(
             @PathVariable Long contestId,
             @ModelAttribute PageQuery pageQuery,
             @AuthenticationPrincipal LoginUser loginUser
     ){
         PageResult<ContestSubmissionListVo> result =
-                contestSubmissionService.getContestSubmissionList(contestId, pageQuery,  loginUser);
+                contestSubmissionService.getMyContestSubmissionList(contestId, pageQuery,  loginUser);
         return success("操作成功", result);
     }
 
@@ -147,6 +150,14 @@ public class ContestController extends BaseController {
     ){
         ContestSubmissionDetailVo vo =
                 contestSubmissionService.getContestSubmissionDetail(contestId, submissionId, loginUser);
+        return success("操作成功", vo);
+    }
+
+
+    @Operation(summary = "获取比赛排行榜")
+    @GetMapping("/{contestId}/ranking")
+    public Result getContestRank(@PathVariable Long contestId, @ModelAttribute PageQuery pageQuery){
+        ContestRankingVo vo = contestRankService.getContestRank(contestId, pageQuery);
         return success("操作成功", vo);
     }
 

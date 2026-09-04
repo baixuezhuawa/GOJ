@@ -164,6 +164,7 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
             SubmissionListVo vo = BeanUtil.copyProperties(s, SubmissionListVo.class);
             Problem problem = problemMapper.selectById(s.getProblemId());
             vo.setProblemName(problem.getProblemName());
+            vo.setUsername(userMapper.selectById(s.getUserId()).getUsername());
             return vo;
         });
         return PageResult.of(voPage);

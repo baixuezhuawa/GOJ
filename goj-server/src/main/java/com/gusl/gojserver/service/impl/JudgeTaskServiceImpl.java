@@ -1,5 +1,6 @@
 package com.gusl.gojserver.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -11,12 +12,10 @@ import com.gusl.common.constant.JudgeTaskStatus;
 import com.gusl.common.constant.JudgeTaskType;
 import com.gusl.common.constant.JudgingConstant;
 import com.gusl.common.constant.SystemConstant;
-import com.gusl.common.pojo.entity.JudgeTask;
-import com.gusl.common.pojo.entity.ProblemReviewSubmission;
-import com.gusl.common.pojo.entity.Submission;
-import com.gusl.gojserver.mapper.JudgeTaskMapper;
-import com.gusl.gojserver.mapper.ProblemReviewSubmissionMapper;
-import com.gusl.gojserver.mapper.SubmissionMapper;
+import com.gusl.common.pojo.entity.*;
+import com.gusl.gojserver.mapper.*;
+import com.gusl.gojserver.pojo.entity.User;
+import com.gusl.gojserver.pojo.vo.JudgeTaskDetailVo;
 import com.gusl.gojserver.pojo.vo.JudgeTaskListVo;
 import com.gusl.gojserver.service.JudgeTaskService;
 import com.gusl.gojserver.service.support.PageFactory;
@@ -41,6 +40,13 @@ public class JudgeTaskServiceImpl
     private final SubmissionMapper submissionMapper;
 
     private final ProblemReviewSubmissionMapper reviewSubmissionMapper;
+
+    private final ContestSubmissionMapper contestSubmissionMapper;
+
+    private final ProblemReviewSubmissionMapper problemReviewSubmissionMapper;
+    private final UserMapper userMapper;
+    private final ProblemMapper problemMapper;
+    private final ContestMapper contestMapper;
 
 
     /**
@@ -125,6 +131,54 @@ public class JudgeTaskServiceImpl
                 .build();
         judgeTaskMapper.insert(newTask);
         return newTask.getId();
+    }
+
+    /**
+     * 获取任务详情
+     */
+    @Override
+    public JudgeTaskDetailVo getJudgeTaskDetailById(Long taskId) {
+        JudgeTask task = judgeTaskMapper.selectById(taskId);
+
+        JudgeTaskDetailVo vo = BeanUtil.copyProperties(task, JudgeTaskDetailVo.class);
+
+        Long userId;
+        Long problemId;
+        Long contestId = -1L;
+
+        if(JudgeTaskType.CONTEST_SUBMISSION.equals(task.getTaskType())){
+            ContestSubmission contestSubmission =
+                    contestSubmissionMapper.selectById(task.getBusinessId());
+            userId = contestSubmission.getUserId();
+            problemId = contestSubmission.getProblemId();
+            contestId = contestSubmission.getContestId();
+        }else if(JudgeTaskType.PROBLEM_REVIEW.equals(task.getTaskType())){
+            ProblemReviewSubmission problemReviewSubmission =
+                    problemReviewSubmissionMapper.selectById(task.getBusinessId());
+            userId = 1L;
+            problemId = problemReviewSubmission.getProblemId();
+        }else {
+            Submission submission = submissionMapper.selectById(task.getBusinessId());
+            userId = submission.getUserId();
+            problemId = submission.getProblemId();
+        }
+
+        User user = userMapper.selectById(userId);
+        Problem problem = problemMapper.selectById(problemId);
+
+        vo.setUserId(userId);
+        vo.setUserName(user.getUsername());
+
+        vo.setProblemId(problemId);
+        vo.setProblemName(problem.getProblemName());
+
+        if(contestId != -1){
+            Contest contest = contestMapper.selectById(contestId);
+            vo.setContestId(contestId);
+            vo.setContestTitle(contest.getTitle());
+        }
+
+        return vo;
     }
 
     /**

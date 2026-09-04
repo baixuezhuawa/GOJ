@@ -6,11 +6,13 @@ import com.gusl.common.common.PageResult;
 import com.gusl.common.common.Result;
 import com.gusl.gojserver.pojo.dto.SubmissionSearchDto;
 import com.gusl.gojserver.pojo.entity.LoginUser;
+import com.gusl.gojserver.pojo.entity.UserProfile;
 import com.gusl.gojserver.pojo.vo.*;
 import com.gusl.gojserver.service.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,6 +20,7 @@ import java.util.List;
 
 @Tag(name = "用户做题中心")
 @RestController
+@PreAuthorize("isAuthenticated()") // 必须登录
 @RequestMapping("/me")
 @RequiredArgsConstructor
 public class UserProfileController extends BaseController {
@@ -31,6 +34,8 @@ public class UserProfileController extends BaseController {
     private final UserLanguageStatService userLanguageStatService;
 
     private final ProfileStatisticsService profileStatisticsService;
+
+    private final UserService userService;
 
     @Operation(summary = "我的尝试过的题目")
     @GetMapping("/attempted-problem")
@@ -103,5 +108,25 @@ public class UserProfileController extends BaseController {
         return success("操作成功", vo);
     }
 
+
+    @Operation(summary = "获取个人信息")
+    @GetMapping("/profile")
+    public Result getMyProfile(
+        @AuthenticationPrincipal LoginUser loginUser
+    ){
+        UserProfile vo = userService.getMyProfile(loginUser);
+        return success("操作成功", vo);
+    }
+
+
+    @Operation(summary = "修改个人信息")
+    @PutMapping("/profile")
+    public Result setMyProfile(
+            @RequestBody UserProfile profile,
+            @AuthenticationPrincipal LoginUser loginUser
+    ){
+        userService.setMyProfile(profile, loginUser);
+        return success();
+    }
 
 }

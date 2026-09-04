@@ -19,6 +19,7 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.util.matcher.RegexRequestMatcher;
 
 
 @EnableMethodSecurity(prePostEnabled = true, securedEnabled = true)
@@ -126,10 +127,41 @@ public class SecurityConfig {
                                 "/img/**"
                         ).permitAll()
 
-                        // 开发阶段开发接口
+                        // 开放接口
+                        // 题目列表允许匿名访问
+                        .requestMatchers(HttpMethod.GET, "/problem/list").permitAll()
+
+                        // 题目详情允许匿名访问，例如 GET /problem/123
                         .requestMatchers(
-                                "/problem/**"
+                                new RegexRequestMatcher("^/problem/[0-9]+$", HttpMethod.GET.name())
                         ).permitAll()
+
+                        // 比赛列表允许匿名访问
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/contest/unfinish-list",
+                                "/contest/finish-list"
+                        ).permitAll()
+
+                        // 比赛详情允许匿名访问，例如 GET /contest/123
+                        .requestMatchers(
+                                new RegexRequestMatcher("^/contest/[0-9]+$", HttpMethod.GET.name())
+                        ).permitAll()
+
+                        // 比赛题目详情允许匿名访问，例如 GET /contest/123/problem/A
+                        // 这里只匹配一个题目编号路径片段，不会放行比赛提交相关接口。
+                        .requestMatchers(
+                                new RegexRequestMatcher("^/contest/[0-9]+/problem/[A-Za-z0-9_-]+$", HttpMethod.GET.name())
+                        ).permitAll()
+
+                        // 开放公共接口
+                        .requestMatchers("/common/**").permitAll()
+
+                        // 开放提交查询接口
+                        .requestMatchers(
+                                new RegexRequestMatcher("^/submission/[0-9]+$", HttpMethod.GET.name())
+                        ).permitAll()
+
 
                         // 其他接口必须登录
                         .anyRequest().authenticated()
