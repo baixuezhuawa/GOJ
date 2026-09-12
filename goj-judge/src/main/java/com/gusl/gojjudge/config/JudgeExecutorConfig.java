@@ -16,31 +16,16 @@ public class JudgeExecutorConfig {
     /**
      * 创建 Redis 队列消费者线程池。
      *
-     * @return 允许普通提交和管理员验题两个长期运行消费者的线程池
+     * @return 消费者线程
      */
     @Bean
     public ThreadPoolTaskExecutor judgeConsumerExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(2);
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(1);
         executor.setQueueCapacity(0);
         executor.setThreadNamePrefix("judge-consumer-");
         return executor;
     }
 
-    /**
-     * 创建测评任务执行线程池。
-     *
-     * @return 执行测评业务的线程池
-     */
-    @Bean("judgeTaskExecutor")
-    public ThreadPoolTaskExecutor judgeTaskExecutor() {
-        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(1);
-        executor.setMaxPoolSize(1);
-        executor.setQueueCapacity(100);
-        executor.setThreadNamePrefix("judge-task-");
-        executor.initialize();
-        return executor;
-    }
 }

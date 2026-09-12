@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.gusl.gojjudge.mapper.UserSubmissionStatusStatMapper">
+
+
+    <insert id="increase">
+        INSERT INTO `user_submission_status_stat` (`user_id`,
+                                                   `status`,
+                                                   `submission_count`,
+                                                   `create_by`)
+        VALUES (#{userId}, #{status}, 1, 'system')
+        ON DUPLICATE KEY UPDATE `submission_count` = `submission_count` + 1,
+                                `update_by`        = 'system',
+                                `update_time`      = CURRENT_TIMESTAMP;
+    </insert>
+</mapper>

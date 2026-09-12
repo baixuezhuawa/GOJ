@@ -2,6 +2,7 @@ package com.gusl.gojserver.service;
 
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.gusl.gojserver.pojo.entity.Tag;
+import com.gusl.gojserver.pojo.vo.ProblemTagsVo;
 
 import java.util.List;
 
@@ -13,4 +14,7 @@ public interface TagService extends IService<Tag> {
      * @return
      */
     List<String> getTagByProblemId(Long problemId);
+
+    List<ProblemTagsVo> getAllTags();
+
 }

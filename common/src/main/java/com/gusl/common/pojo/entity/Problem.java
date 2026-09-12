@@ -73,8 +73,8 @@ public class Problem extends BaseEntity {
     @Schema(description = "出题人用户 id")
     private Long authorId;
 
-    /** 题目状态：0 草稿，1 已发布，2 已停用，3 待审核，4 已退回。 */
-    @Schema(description = "题目状态：0 草稿，1 已发布，2 已停用，3 待审核，4 已退回")
+    /** 题目状态：0 草稿，1 已发布，2 已停用，3 待审核，4 已退回，5 准备中。 */
+    @Schema(description = "题目状态：0 草稿，1 已发布，2 已停用，3 待审核，4 已退回，5 准备中")
     private Integer status;
 
 }

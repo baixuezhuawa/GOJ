@@ -22,4 +22,7 @@ public final class ProblemStatus {
 
     /** 审核未通过，已退回给作者。 */
     public static final Integer WITHDRAW = 4;
+
+    /** 准备状态, 可以用于准备比赛题目 */
+    public static final Integer PREPARE = 5;
 }

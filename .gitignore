@@ -4,3 +4,10 @@
 *.class
 
 HELP.md
+
+# GOJ Web
+goj-web/node_modules/
+goj-web/dist/
+goj-web/.vite/
+
+.agents/**

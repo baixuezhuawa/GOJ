@@ -2,17 +2,22 @@ package com.gusl.gojserver.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollectionUtil;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.gusl.common.common.BaseException;
 import com.gusl.common.utils.StringUtils;
+import com.gusl.gojserver.pojo.entity.LoginUser;
 import com.gusl.gojserver.pojo.entity.Role;
 import com.gusl.gojserver.pojo.entity.User;
 import com.gusl.gojserver.mapper.RoleMapper;
 import com.gusl.gojserver.mapper.UserMapper;
 import com.gusl.gojserver.mapper.UserRoleMapper;
 import com.gusl.gojserver.pojo.dto.UserRegisterDto;
+import com.gusl.gojserver.pojo.entity.UserProfile;
 import com.gusl.gojserver.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.security.SecurityProperties;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
@@ -29,6 +35,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     private final UserRoleMapper userRoleMapper;
     private final RoleMapper roleMapper;
 
+    /** 用户注册 */
     @Transactional(rollbackFor = Exception.class)
     @Override
     public void doRegister(UserRegisterDto registerDto) {
@@ -66,5 +73,41 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         userMapper.insert(user);
         // 默认权限, 普通用户
         userRoleMapper.insert(user.getId(), userRoleId);
+    }
+
+
+    /**
+     * 获取用户给人信息
+     */
+    @Override
+    public UserProfile getMyProfile(LoginUser loginUser) {
+        User user = userMapper.selectOne(
+                Wrappers.<User> lambdaQuery()
+                        .eq(User::getId, loginUser.getUserId())
+                        .eq(User::getStatus, 1)
+        );
+        if (user == null) {
+            throw new BaseException("该用户不存在/被封禁");
+        }
+        return BeanUtil.copyProperties(user, UserProfile.class);
+    }
+
+    /** 修改个人信息 */
+    @Override
+    public void setMyProfile(UserProfile profile, LoginUser loginUser) {
+        int update = userMapper.update(
+                Wrappers.<User>lambdaUpdate()
+                        .set(profile.getPhoneNumber() != null, User::getPhoneNumber, profile.getPhoneNumber())
+                        .set(profile.getGender() != null, User::getGender, profile.getGender())
+                        .set(profile.getAvatar() != null, User::getAvatar, profile.getAvatar())
+                        .set(profile.getEmail() != null, User::getEmail, profile.getEmail())
+                        .set(profile.getBirthdate() != null, User::getBirthdate, profile.getBirthdate())
+                        .eq(User::getId, loginUser.getUserId())
+                        .eq(User::getStatus, 1)
+        );
+        if (update != 1){
+            throw new BaseException("修改失败");
+        }
+        log.info("{} 个人信息更新成功!", loginUser.getUser().getUsername());
     }
 }

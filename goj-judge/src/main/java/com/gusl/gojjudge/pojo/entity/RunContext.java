@@ -1,5 +1,6 @@
 package com.gusl.gojjudge.pojo.entity;
 
+import com.alibaba.fastjson2.JSONObject;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,11 +19,14 @@ import lombok.NoArgsConstructor;
 public class RunContext {
 
     /** 当前测试点的标准输入内容。 */
-    String input;
+    private String input;
 
-    /** 编译阶段产生的沙箱文件引用。 */
-    ProgramArtifact program;
+    /** 时间限制, 对应cpuLimit*/
+    private Long timeLimitMs;
 
-    /** 题目运行限制，业务单位为毫秒和 KB。 */
-    RuntimeLimit limit;
+    /** 空间限制 */
+    private Long memoryLimitKb;
+
+    /** 可执行文件: fileId/content */
+    private JSONObject activeFile;
 }

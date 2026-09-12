@@ -1,16 +1,18 @@
 package com.gusl.gojserver.service.impl;
 
+import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.lang.UUID;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.baomidou.mybatisplus.extension.repository.AbstractRepository;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.gusl.common.common.BaseException;
 import com.gusl.common.constant.ProblemStatus;
 import com.gusl.common.constant.ProblemTestDataStatus;
 import com.gusl.common.pojo.entity.Problem;
 import com.gusl.common.pojo.entity.ProblemTestData;
-import com.gusl.common.utils.StringUtils;
-import com.gusl.gojserver.config.properties.JudgeProperties;
+import com.gusl.common.utils.Sha256Utils;
+import com.gusl.gojserver.config.properties.SysProperties;
 import com.gusl.gojserver.mapper.ProblemMapper;
 import com.gusl.gojserver.mapper.ProblemTestDataMapper;
 import com.gusl.gojserver.pojo.entity.LoginUser;
@@ -22,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
-import java.net.BindException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -30,9 +31,9 @@ import java.nio.file.StandardOpenOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Collections;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
@@ -47,7 +48,7 @@ public class ProblemTestDataServiceImpl extends ServiceImpl<ProblemTestDataMappe
 
     private final ProblemTestDataMapper problemTestDataMapper;
 
-    private final JudgeProperties judgeProperties;
+    private final SysProperties sysProperties;
 
 
     /** 上传测试数据 */
@@ -84,23 +85,17 @@ public class ProblemTestDataServiceImpl extends ServiceImpl<ProblemTestDataMappe
         String uuid = UUID.fastUUID().toString();
 
         // 上传测试数据的暂存区路径
-        Path uploadDir = dataRoot().resolve("staging")
+        Path uploadDir = Path.of(sysProperties.getDataRoot())
+                .resolve("staging")
                 .resolve("upload-" + uuid)
                 .normalize();
 
-        // 压缩包存放地点, 解压后存放目录
-        Path archivePath = uploadDir.resolve("original.zip");
+        // 解压后存放目录
         Path extractedDir = uploadDir.resolve("extracted");
 
         try {
             // 为当前测试数创建暂存区
             Files.createDirectories(uploadDir);
-
-            // 为该压缩包计算sha256值
-            String sha256;
-            try (InputStream inputStream = file.getInputStream()) {
-                sha256 = saveAndCalculateSha256(inputStream, archivePath);
-            }
 
             // 更新上传状态
             int uploadedRows = problemTestDataMapper.update(
@@ -113,8 +108,8 @@ public class ProblemTestDataServiceImpl extends ServiceImpl<ProblemTestDataMappe
                 throw new BaseException("测试数据上传状态更新失败");
             }
 
-            // 安全解压
-            unzipSafely(archivePath, extractedDir);
+            // 安全解压并为该压缩包计算sha256值
+            String sha256 = unzipSafely(file.getInputStream(), extractedDir);
 
             // 检验解压后测试数据的合法性, 返回测试点数
             int testNodeCount = validateTestData(extractedDir);
@@ -150,7 +145,7 @@ public class ProblemTestDataServiceImpl extends ServiceImpl<ProblemTestDataMappe
     }
 
 
-    /** 直接更新测试数据 */
+    /** 草稿阶段替换测试数据 */
     @Override
     public void updateTestDataWithdraw(Long problemId, MultipartFile data, LoginUser loginUser) {
        /*
@@ -197,29 +192,27 @@ public class ProblemTestDataServiceImpl extends ServiceImpl<ProblemTestDataMappe
         String uuid = UUID.fastUUID().toString();
 
         // 上传测试数据的暂存区路径
-        Path uploadDir = dataRoot().resolve("staging")
+        Path uploadDir = Path.of(sysProperties.getDataRoot())
+                .resolve("staging")
                 .resolve("upload-" + uuid)
                 .normalize();
 
-        // 压缩包存放地点, 解压后存放目录
-        Path archivePath = uploadDir.resolve("original.zip");
+        // 解压后存放目录
         Path extractedDir = uploadDir.resolve("extracted");
 
         try {
             // 为当前测试数创建暂存区
             Files.createDirectories(uploadDir);
 
-            // 为该压缩包计算sha256值
+            // 安全解压并为该压缩包计算sha256值
             String sha256;
             try (InputStream inputStream = data.getInputStream()) {
-                sha256 = saveAndCalculateSha256(inputStream, archivePath);
+                sha256 = unzipSafely(inputStream, extractedDir);
             }
+
             if(sha256.equals(testDataDb.getArchiveSha256())){
                 throw new BaseException("上传重复文件");
             }
-
-            // 安全解压
-            unzipSafely(archivePath, extractedDir);
 
             // 检验路径是否正确, 如果不正确, 则进行删除
             int testNodeCount = validateTestData(extractedDir);
@@ -276,59 +269,153 @@ public class ProblemTestDataServiceImpl extends ServiceImpl<ProblemTestDataMappe
     }
 
 
-    private Path dataRoot() {
-        return Path.of(judgeProperties.getDataRoot()).toAbsolutePath().normalize();
+    /**
+     * 管理员上传测试数据
+     */
+    @Override
+    public void uploadTestDataByAdmin(Long problemId, MultipartFile data, String remark) {
+        // 非草稿阶段的问题, 因为管理员上传题目都直接是PREPARE阶段了
+        Problem problem = problemMapper.selectById(problemId);
+
+        if (problem == null) {
+            throw new BaseException("问题不存在");
+        }
+
+        String originalFilename = data.getOriginalFilename();
+        if (originalFilename == null || !originalFilename.endsWith(".zip")) {
+            throw new BaseException("测试数据必须使用 ZIP 压缩包");
+        }
+
+        int version = nextVersion(problemId);
+
+        // 插入测试数据
+        ProblemTestData testData = ProblemTestData.builder()
+                .problemId(problemId)
+                .archiveName(originalFilename)
+                .status(ProblemTestDataStatus.UPLOADING)
+                .active(false)
+                .version(version)
+                .build();
+        testData.setRemark(remark);
+        problemTestDataMapper.insert(testData);
+
+        // 目标目录
+        Path extractDir = Path.of(sysProperties.getDataRoot())
+                .resolve("testData")
+                .resolve("p" + problemId)
+                .resolve("v" + version);
+
+        try {
+
+            String sha256 = unzipSafely(data.getInputStream(), extractDir);
+
+            int testNodeCount = validateTestData(extractDir);
+
+            List<ProblemTestData> multiTestData = problemTestDataMapper.selectList(
+                    Wrappers.<ProblemTestData>lambdaQuery()
+                            .eq(ProblemTestData::getProblemId, problemId)
+                            .eq(ProblemTestData::getArchiveSha256, sha256)
+            );
+
+            if (!CollectionUtil.isEmpty(multiTestData)){
+                throw new BaseException("历史数据已经有了重复: " + multiTestData);
+            }
+
+            // 更新测试数据状态, 上传完成, 但是默认是不启用的, 需要管理员再更新.
+            int extractedRows = problemTestDataMapper.update(
+                    Wrappers.<ProblemTestData>lambdaUpdate()
+                            .set(ProblemTestData::getArchiveSha256, sha256)
+                            .set(ProblemTestData::getStoragePath, "testData/p" + problemId + "/v" + version)
+                            .set(ProblemTestData::getTestNodeCount, testNodeCount)
+                            .set(ProblemTestData::getStatus, ProblemTestDataStatus.READY)
+
+                            .eq(ProblemTestData::getId, testData.getId())
+                            .eq(ProblemTestData::getStatus, ProblemTestDataStatus.UPLOADING)
+                            .eq(ProblemTestData::getVersion, version)
+            );
+
+            if (extractedRows != 1){
+                throw new BaseException("测试数据异常");
+            }
+
+        } catch (Exception e) {
+            // 删除这个目录下残余文件
+            FileUtil.del(extractDir);
+            problemTestDataMapper.deleteById(testData.getId());
+            throw new BaseException(e.getMessage());
+        }
+        log.info("上传成功");
     }
 
     /**
-     * 保存上传的压缩包，并计算其 SHA-256。
-     * @param inputStream 上传文件输入流
-     * @param targetPath 暂存目录中的压缩包路径
+     * 启用指定版本的测试数据, 似乎会出现短暂的不一致性
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void enableProblemTestDataVersion(Long problemId, Integer version) {
+        // 只能启用一个
+        problemTestDataMapper.update(
+            Wrappers.<ProblemTestData> lambdaUpdate()
+                    .set(ProblemTestData::getActive, 0)
+                    .set(ProblemTestData::getStatus, ProblemTestDataStatus.RETIRED)
+                    .eq(ProblemTestData::getActive, 1)
+                    .eq(ProblemTestData::getProblemId, problemId)
+        );
+        int update = problemTestDataMapper.update(
+                Wrappers.<ProblemTestData>lambdaUpdate()
+                        .set(ProblemTestData::getActive, 1)
+                        .eq(ProblemTestData::getStatus, ProblemTestDataStatus.READY)
+                        .eq(ProblemTestData::getVersion, version)
+                        .eq(ProblemTestData::getProblemId, problemId)
+        );
+        if (update != 1){
+            throw new BaseException("切换测试数据失败");
+        }
+    }
+
+    /** 删除测试数据 */
+    @Override
+    public void deleteProblemTestDataVersion(Long problemId, Integer version) {
+        ProblemTestData testData = problemTestDataMapper.selectOne(
+                Wrappers.<ProblemTestData>lambdaQuery()
+                        .eq(ProblemTestData::getProblemId, problemId)
+                        .eq(ProblemTestData::getVersion, version)
+                        .ne(ProblemTestData::getActive, 1)
+        );
+        if (testData == null) {
+            throw new BaseException("不能删除启用中的测试数据/测试数据不存在");
+        }
+        // 先删除测试数据信息
+        problemTestDataMapper.deleteById(testData);
+
+        // 再删除磁盘上的, 如果失败, 后续也可以通过定时任务清理.
+        Path tarDir = Path.of(sysProperties.getDataRoot()).resolve(testData.getStoragePath());
+
+        FileUtil.del(tarDir);
+
+        log.info("删除测试数据成功");
+    }
+
+
+    /**
+     * 安全解压测试数据, 并计算sha256值
+     * @param inputStream 源压缩文件
+     * @param extractedDir 提取到的目标目录下
      * @return 由 64 个十六进制字符组成的 SHA-256
      */
-    private String saveAndCalculateSha256(InputStream inputStream, Path targetPath) throws IOException {
-        MessageDigest digest = createSha256Digest();
-
-        try (
-                InputStream digestInput = new DigestInputStream(inputStream, digest);
-                OutputStream output = Files.newOutputStream(targetPath, StandardOpenOption.CREATE_NEW)
-        ) {
-            digestInput.transferTo(output);
-        }
-
-        return HexFormat.of().formatHex(digest.digest());
-    }
-
-
-    /**
-     * @return SHA-256 摘要计算器。
-     */
-    private MessageDigest createSha256Digest() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException exception) {
-            // Java 标准环境必须支持 SHA-256，出现该异常说明运行环境异常。
-            throw new IllegalStateException("当前运行环境不支持 SHA-256", exception);
-        }
-    }
-
-
-    /**
-     * 安全解压测试数据
-     * @param archivePath 需要解压文件地址
-     * @param extractedDir 提取到的目标目录下
-     */
-    private void unzipSafely(Path archivePath, Path extractedDir) throws IOException {
+    private String unzipSafely(InputStream inputStream, Path extractedDir) throws IOException {
         Files.createDirectories(extractedDir);
 
         long totalBytes = 0;
         int entryCount = 0;
 
-        try (ZipInputStream zipInput = new ZipInputStream(Files.newInputStream(archivePath))) {
+        MessageDigest digest = Sha256Utils.createSha256Digest();
+
+        try (ZipInputStream zipInput = new ZipInputStream(new DigestInputStream(inputStream, digest))) {
             ZipEntry entry;
 
             while ((entry = zipInput.getNextEntry()) != null) {
-                if (++entryCount > 1000) { // TODO 这个1000 可以写到配置文件中
+                if (++entryCount > sysProperties.getFile().getMaxEntry()) {
                     throw new BaseException("压缩包文件数量超过限制");
                 }
 
@@ -359,7 +446,7 @@ public class ProblemTestDataServiceImpl extends ServiceImpl<ProblemTestDataMappe
                     int length;
                     while ((length = zipInput.read(buffer)) != -1) {
                         totalBytes += length;
-                        if (totalBytes > 200L * 1024 * 1024) { // TODO 这个文件大小的限制同样如此
+                        if (totalBytes > sysProperties.getFile().getMaxTotalBytes()) {
                             throw new BaseException("解压后文件总大小超过限制");
                         }
                         output.write(buffer, 0, length);
@@ -371,6 +458,8 @@ public class ProblemTestDataServiceImpl extends ServiceImpl<ProblemTestDataMappe
         if (entryCount == 0) {
             throw new BaseException("压缩包不能为空");
         }
+
+        return HexFormat.of().formatHex(digest.digest());
     }
 
 
@@ -418,21 +507,15 @@ public class ProblemTestDataServiceImpl extends ServiceImpl<ProblemTestDataMappe
      */
     private void requireRegularFile(Path filePath) {
         if (!Files.exists(filePath, LinkOption.NOFOLLOW_LINKS)) {
-            throw new BaseException(
-                    "缺少测试数据文件：" + filePath.getFileName()
-            );
+            throw new BaseException("缺少测试数据文件：" + filePath.getFileName());
         }
 
         if (!Files.isRegularFile(filePath, LinkOption.NOFOLLOW_LINKS)) {
-            throw new BaseException(
-                    "测试数据路径不是普通文件：" + filePath.getFileName()
-            );
+            throw new BaseException("测试数据路径不是普通文件：" + filePath.getFileName());
         }
 
         if (!Files.isReadable(filePath)) {
-            throw new BaseException(
-                    "测试数据文件不可读：" + filePath.getFileName()
-            );
+            throw new BaseException("测试数据文件不可读：" + filePath.getFileName());
         }
     }
 

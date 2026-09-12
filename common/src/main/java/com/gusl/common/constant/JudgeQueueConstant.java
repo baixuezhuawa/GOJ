@@ -13,4 +13,7 @@ public final class JudgeQueueConstant {
 
     /** 管理员验题提交队列。 */
     public static final String PROBLEM_REVIEW_READY_QUEUE = "goj:judge:problem-review:ready";
+
+    /** 比赛队列 */
+    public static final String CONTEST_READY_QUEUE = "goj:judge:contest-ready";
 }

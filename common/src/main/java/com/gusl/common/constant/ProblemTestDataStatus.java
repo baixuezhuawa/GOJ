@@ -20,9 +20,9 @@ public final class ProblemTestDataStatus {
     /** 非法 */
     public static final String INVALID = "INVALID";
 
-    /** 启用中 */
+    /** 已完成校验并发布到正式目录上, 可以被启用 */
     public static final String READY = "READY";
 
-    /** 非启用 */
+    /** 已撤销, 不允许用于普通测评 */
     public static final String RETIRED = "RETIRED";
 }

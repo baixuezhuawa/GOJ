@@ -4,13 +4,9 @@ import cn.hutool.core.bean.BeanUtil;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.gusl.common.common.BaseException;
-import com.gusl.common.constant.JudgeQueueConstant;
-import com.gusl.common.constant.JudgingConstant;
-import com.gusl.common.constant.ProblemStatus;
-import com.gusl.common.constant.ProblemTestDataStatus;
-import com.gusl.common.pojo.entity.Problem;
-import com.gusl.common.pojo.entity.ProblemReviewSubmission;
-import com.gusl.common.pojo.entity.ProblemTestData;
+import com.gusl.common.constant.*;
+import com.gusl.common.pojo.entity.*;
+import com.gusl.gojserver.mapper.JudgeTaskMapper;
 import com.gusl.gojserver.mapper.ProblemMapper;
 import com.gusl.gojserver.mapper.ProblemReviewSubmissionMapper;
 import com.gusl.gojserver.mapper.ProblemTestDataMapper;
@@ -21,8 +17,8 @@ import com.gusl.gojserver.service.ProblemReviewJudgeService;
 import com.gusl.gojserver.service.support.JudgeSourceValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
@@ -37,14 +33,19 @@ public class ProblemReviewJudgeServiceImpl
         implements ProblemReviewJudgeService {
 
     private final ProblemReviewSubmissionMapper reviewSubmissionMapper;
+
     private final ProblemMapper problemMapper;
+
     private final ProblemTestDataMapper problemTestDataMapper;
-    private final StringRedisTemplate redisTemplate;
+
+    private final JudgeTaskMapper judgeTaskMapper;
+
     private final JudgeSourceValidator judgeSourceValidator;
 
     /**
      * 创建管理员验题任务。
      */
+    @Transactional(rollbackFor = Exception.class)
     @Override
     public Long submit(Long problemId, ProblemReviewJudgeDto dto, LoginUser loginUser) {
         if (dto == null) {
@@ -61,24 +62,39 @@ public class ProblemReviewJudgeServiceImpl
         String sha256 = judgeSourceValidator.validateAndHash(dto.getLanguage(), dto.getSourceCode());
         requireNoRecentDuplicate(problemId, loginUser.getUserId(), dto.getLanguage(), sha256);
 
+        return enqueueSubmission(problemId, testData, loginUser.getUserId(), sha256, dto.getLanguage(), dto.getSourceCode());
+    }
+
+    private Long enqueueSubmission(
+            Long problemId,
+            ProblemTestData data,
+            Long userId,
+            String sha256,
+            String language,
+            String sourceCode
+    ){
         // 写入独立验题表，并把验题记录 id 放入独立 Redis 队列。
         ProblemReviewSubmission submission = ProblemReviewSubmission.builder()
                 .problemId(problemId)
-                .problemTestDataId(testData.getId())
-                .reviewerId(loginUser.getUserId())
-                .language(dto.getLanguage())
-                .sourceCode(dto.getSourceCode())
+                .problemTestDataId(data.getId())
+                .reviewerId(userId)
+                .language(language)
+                .sourceCode(sourceCode)
                 .sourceSha256(sha256)
                 .status(JudgingConstant.IN_QUEUE)
                 .submissionTime(LocalDateTime.now())
                 .build();
         reviewSubmissionMapper.insert(submission);
 
-        redisTemplate.opsForList().leftPush(
-                JudgeQueueConstant.PROBLEM_REVIEW_READY_QUEUE,
-                submission.getId().toString()
-        );
-        log.info("管理员 {} 提交题目 {} 的验题任务 {}", loginUser.getUserId(), problemId, submission.getId());
+
+        JudgeTask judgeTask = JudgeTask.builder()
+                .businessId(submission.getId())
+                .status(JudgeTaskStatus.PENDING)
+                .taskType(JudgeTaskType.PROBLEM_REVIEW)
+                .taskVersion(1)
+                .build();
+        judgeTaskMapper.insert(judgeTask);
+
         return submission.getId();
     }
 

@@ -1,6 +1,7 @@
 package com.gusl.gojjudge.properties.lang;
 
 import com.gusl.gojjudge.pojo.entity.CompileLimitInfo;
+import com.gusl.gojjudge.pojo.entity.RunLimitInfo;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -36,4 +37,7 @@ public class Java11Properties {
 
     /** Java 编译阶段资源和输出限制。 */
     private CompileLimitInfo compile;
+
+    /** java 运行阶段限制 */
+    private RunLimitInfo run;
 }
