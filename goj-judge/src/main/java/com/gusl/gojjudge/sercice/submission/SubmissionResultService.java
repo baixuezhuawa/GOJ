@@ -1,6 +1,7 @@
-package com.gusl.gojjudge.sercice;
+package com.gusl.gojjudge.sercice.submission;
 
 import com.gusl.common.pojo.entity.ContestSubmission;
+import com.gusl.common.pojo.entity.ProblemReviewSubmission;
 import com.gusl.common.pojo.entity.Submission;
 import com.gusl.gojjudge.pojo.entity.JudgeOutcome;
 
@@ -16,7 +17,7 @@ public interface SubmissionResultService {
      * @param submission 当前普通提交
      * @param outcome 当前测评结果
      */
-    void updateSubmission(Submission submission, JudgeOutcome outcome);
+    boolean updateSubmission(Submission submission, JudgeOutcome outcome);
 
 
     /**
@@ -24,5 +25,13 @@ public interface SubmissionResultService {
      * @param contestSubmission 比赛提交
      * @param outcome 当前测评结果
      */
-    void updateSubmission(ContestSubmission contestSubmission, JudgeOutcome outcome);
+    boolean updateSubmission(ContestSubmission contestSubmission, JudgeOutcome outcome);
+
+
+    /**
+     * 写回验题提交的当前测评结果.
+     * @param reviewSubmission 验题提交
+     * @param cur 当前测评结果.
+     */
+    boolean updateSubmission(ProblemReviewSubmission reviewSubmission, JudgeOutcome cur);
 }

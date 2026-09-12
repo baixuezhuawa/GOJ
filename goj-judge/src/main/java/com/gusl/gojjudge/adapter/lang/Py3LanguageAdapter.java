@@ -4,11 +4,14 @@ import com.alibaba.fastjson2.JSONObject;
 import com.gusl.gojjudge.adapter.AbstractLanguageAdapter;
 import com.gusl.gojjudge.pojo.entity.CompilePlan;
 import com.gusl.gojjudge.pojo.entity.RunContext;
+import com.gusl.gojjudge.pojo.entity.RunLimitInfo;
 import com.gusl.gojjudge.properties.lang.Py3Properties;
+import com.gusl.gojjudge.sandbox.SandboxRunRequestForm;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Python3 语言适配器
@@ -16,12 +19,6 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 public class Py3LanguageAdapter extends AbstractLanguageAdapter {
-
-    /** Python3 程序运行时标准输出上限，单位为字节。 */
-    private static final int DEFAULT_RUN_STDOUT_LIMIT_BYTES = 1024 * 1024;
-
-    /** Python3 程序运行时标准错误输出上限，单位为字节。 */
-    private static final int DEFAULT_RUN_STDERR_LIMIT_BYTES = 16 * 1024 * 1024;
 
     /** 由 Spring 绑定的 python3 工具链和编译配置。 */
     private final Py3Properties py3;
@@ -38,44 +35,59 @@ public class Py3LanguageAdapter extends AbstractLanguageAdapter {
     }
 
     @Override
-    public CompilePlan createCompilePlan(String sourceCode) {
-        return CompilePlan.builder()
-                .required(false)
-                .build();
+    public boolean isNeedCompile() {
+        return false;
+    }
+
+
+    @Override
+    public JSONObject createCompileRequest(String sourceCode) {
+
+        return null;
     }
 
     @Override
-    public JSONObject createRunRequest(RunContext runContext) {
-        JSONObject stdin = JSONObject.of("content", runContext.getInput());
+    public JSONObject createRunRequest(RunContext context) {
+        SandboxRunRequestForm form = new SandboxRunRequestForm();
+
+        form.setArgs(buildRunArgs());
+
+        // cpu limit
+        form.setCpuLimit(context.getTimeLimitMs() * 1000_000L);
+
+        // real cpu limit
+        form.setRealCpuLimit(context.getTimeLimitMs() * 3L * 1000_000L);
+
+        // memory limit
+        form.setMemoryLimit(context.getMemoryLimitKb() * 1024L * 1024L);
+
+
+        RunLimitInfo run = py3.getRun();
+
+        // stack limit
+        form.setStackLimit(run.getStackLimitKb() * 1024L * 1024L);
+
+        // proc limit
+        form.setProcLimit(run.getProcLimit().longValue());
+
+        // files
+        JSONObject content = JSONObject.of("content", "");
         JSONObject stdout = JSONObject.of(
                 "name", "stdout",
-                "max", DEFAULT_RUN_STDOUT_LIMIT_BYTES
+                "max", run.getStdoutLimitBytes()
         );
         JSONObject stderr = JSONObject.of(
                 "name", "stderr",
-                "max", DEFAULT_RUN_STDERR_LIMIT_BYTES
+                "max", run.getStderrLimitBytes()
         );
+        form.setFiles(List.of(content, stdout, stderr));
 
+        // copyIn
+        form.setCopyIn(Map.of("Main.py", JSONObject.of("content", context.getInput())));
 
-        JSONObject copyFileName = createProgramCopyIn(runContext.getProgram());
+        form.setCopyOut(List.of("stdout", "stderr"));
 
-        // 运行请求只引用已缓存的 jar，不再重复编译，也不创建新的缓存文件。
-        return buildCommonRequest(
-                buildRunArgs(),
-                py3.getEnv(),
-                stdin,
-                stdout,
-                stderr,
-                copyFileName,
-                null,
-                runContext.getLimit(),
-                null
-        );
-    }
-
-    @Override
-    protected JSONObject createCompileRequest(String sourceCode) {
-        return null;
+        return form.generate();
     }
 
     @Override

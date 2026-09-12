@@ -1,4 +1,4 @@
-package com.gusl.gojjudge.sercice.impl;
+package com.gusl.gojjudge.sercice.application;
 
 import com.alibaba.fastjson2.JSON;
 import com.gusl.common.constant.JudgeQueueConstant;

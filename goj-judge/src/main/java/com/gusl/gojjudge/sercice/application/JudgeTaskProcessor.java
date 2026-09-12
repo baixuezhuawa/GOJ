@@ -1,13 +1,10 @@
-package com.gusl.gojjudge.sercice.impl;
+package com.gusl.gojjudge.sercice.application;
 
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
-import com.gusl.common.constant.JudgeQueueConstant;
 import com.gusl.common.constant.JudgeTaskStatus;
-import com.gusl.common.constant.JudgeTaskType;
 import com.gusl.common.pojo.entity.JudgeTask;
 import com.gusl.common.pojo.entity.JudgeTaskMessage;
 import com.gusl.gojjudge.mapper.JudgeTaskMapper;
-import com.gusl.gojjudge.sercice.JudgeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -57,7 +54,7 @@ public class JudgeTaskProcessor {
 
         try {
             // 根据任务类型执行对应测评。
-            executeBusinessTask(message);
+            judgeService.judge(message);
 
             // 测评正常结束，任务标记为成功。
             markSucceeded(message.getTaskId());
@@ -120,32 +117,6 @@ public class JudgeTaskProcessor {
 
 
 
-    /**
-     * 根据任务类型调用对应测评入口。
-     *
-     * @param message 测评任务消息
-     */
-    private void executeBusinessTask(JudgeTaskMessage message) {
-
-        if(JudgeTaskType.CONTEST_SUBMISSION.equals(message.getTaskType())){
-            judgeService.judgeContestSubmission(message.getBusinessId());
-            return;
-        }
-
-        if (JudgeTaskType.SUBMISSION.equals(message.getTaskType())) {
-            judgeService.judgeSubmission(message.getBusinessId());
-            return;
-        }
-
-        if (JudgeTaskType.PROBLEM_REVIEW.equals(message.getTaskType())) {
-            judgeService.judgeProblemReview(message.getBusinessId());
-            return;
-        }
-
-        throw new IllegalArgumentException("不支持的测评任务类型：" + message.getTaskType());
-    }
-
-
 
     /**
      * 将执行完成的任务标记为成功。
@@ -169,7 +140,6 @@ public class JudgeTaskProcessor {
             log.warn("测评任务成功状态更新失败，taskId={}", taskId);
         }
     }
-
 
 
 }

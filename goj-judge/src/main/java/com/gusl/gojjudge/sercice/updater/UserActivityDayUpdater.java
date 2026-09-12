@@ -4,7 +4,7 @@ import com.gusl.common.constant.JudgingConstant;
 import com.gusl.gojjudge.mapper.UserActivityDayMapper;
 import com.gusl.gojjudge.mapper.UserProblemProgressMapper;
 import com.gusl.gojjudge.pojo.entity.SubmissionFinalizedContext;
-import com.gusl.gojjudge.sercice.SubmissionFinalizedUpdater;
+import com.gusl.gojjudge.sercice.submission.SubmissionFinalizedUpdater;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;

@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.gusl.common.constant.JudgeTaskStatus;
 import com.gusl.common.pojo.entity.JudgeTask;
 import com.gusl.gojjudge.mapper.JudgeTaskMapper;
-import com.gusl.gojjudge.sercice.impl.JudgeTaskRecoveryService;
+import com.gusl.gojjudge.sercice.application.JudgeTaskRecoveryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

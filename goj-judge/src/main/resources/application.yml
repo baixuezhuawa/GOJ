@@ -28,11 +28,32 @@ goj:
           proc-limit: 64
           stdout-limit-bytes: 16777216
           stderr-limit-bytes: 16777216
+        run:
+          clock-limit-multiplier: 3
+          stack-limit-kb: 131072
+          proc-limit: 64
+          stdout-limit-bytes: 1048576
+          stderr-limit-bytes: 16777216
+
       py3:
         code: py3
         python: /usr/bin/python3
         env: PYTHONIOENCODING=utf-8
         active-file-name: Main.py
+        compile:
+          cpu-limit-ms: 10000
+          real-cpu-limit-ms: 30000
+          memory-limit-kb: 524288
+          stack-limit-kb: 131072
+          proc-limit: 64
+          stdout-limit-bytes: 16777216
+          stderr-limit-bytes: 16777216
+        run:
+          clock-limit-multiplier: 3
+          stack-limit-kb: 131072
+          proc-limit: 64
+          stdout-limit-bytes: 1048576
+          stderr-limit-bytes: 16777216
 
 
 

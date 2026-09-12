@@ -3,7 +3,7 @@ package com.gusl.gojjudge.sercice.updater;
 import com.gusl.common.constant.JudgingConstant;
 import com.gusl.gojjudge.mapper.UserLanguageStatMapper;
 import com.gusl.gojjudge.pojo.entity.SubmissionFinalizedContext;
-import com.gusl.gojjudge.sercice.SubmissionFinalizedUpdater;
+import com.gusl.gojjudge.sercice.submission.SubmissionFinalizedUpdater;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 

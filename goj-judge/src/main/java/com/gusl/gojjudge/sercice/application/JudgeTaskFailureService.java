@@ -1,4 +1,4 @@
-package com.gusl.gojjudge.sercice.impl;
+package com.gusl.gojjudge.sercice.application;
 
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -6,7 +6,6 @@ import com.gusl.common.constant.JudgeTaskStatus;
 import com.gusl.common.pojo.entity.JudgeTask;
 import com.gusl.common.pojo.entity.JudgeTaskMessage;
 import com.gusl.gojjudge.mapper.JudgeTaskMapper;
-import com.gusl.gojjudge.sercice.JudgeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;

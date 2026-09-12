@@ -1,8 +1,8 @@
 package com.gusl.gojjudge.consumer;
 
 
-import com.gusl.gojjudge.sercice.JudgeService;
-import com.gusl.gojjudge.sercice.impl.JudgeQueueDispatcher;
+import com.gusl.gojjudge.sercice.application.JudgeService;
+import com.gusl.gojjudge.sercice.application.JudgeQueueDispatcher;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;

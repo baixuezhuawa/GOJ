@@ -1,4 +1,4 @@
-package com.gusl.gojjudge.sercice;
+package com.gusl.gojjudge.sercice.submission;
 
 import com.gusl.gojjudge.pojo.entity.SubmissionFinalizedContext;
 

@@ -2,13 +2,16 @@ package com.gusl.gojjudge.adapter.lang;
 
 import com.alibaba.fastjson2.JSONObject;
 import com.gusl.gojjudge.adapter.AbstractLanguageAdapter;
-import com.gusl.gojjudge.pojo.entity.CompilePlan;
+import com.gusl.gojjudge.pojo.entity.CompileLimitInfo;
 import com.gusl.gojjudge.pojo.entity.RunContext;
+import com.gusl.gojjudge.pojo.entity.RunLimitInfo;
 import com.gusl.gojjudge.properties.lang.Java11Properties;
+import com.gusl.gojjudge.sandbox.SandboxRunRequestForm;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Java 11 语言适配器。
@@ -16,12 +19,6 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 public class Java11LanguageAdapter extends AbstractLanguageAdapter {
-
-    /** Java 程序运行时标准输出上限，单位为字节。 */
-    private static final int DEFAULT_RUN_STDOUT_LIMIT_BYTES = 1024 * 1024;
-
-    /** Java 程序运行时标准错误输出上限，单位为字节。 */
-    private static final int DEFAULT_RUN_STDERR_LIMIT_BYTES = 16 * 1024 * 1024;
 
     /** 由 Spring 绑定的 Java 11 工具链和编译配置。 */
     private final Java11Properties java11;
@@ -37,19 +34,9 @@ public class Java11LanguageAdapter extends AbstractLanguageAdapter {
         return java11.getActiveCacheFileName();
     }
 
-    /**
-     * 为 Java 源码创建编译计划。
-     *
-     * @param sourceCode 用户提交的 Java 源码
-     * @return Java 编译请求及编译产物名称
-     */
     @Override
-    public CompilePlan createCompilePlan(String sourceCode) {
-        return CompilePlan.builder()
-                .required(true)
-                .requestBody(createCompileRequest(sourceCode))
-                .cachedArtifactName(java11.getActiveCacheFileName())
-                .build();
+    public boolean isNeedCompile() {
+        return true;
     }
 
     /**
@@ -59,65 +46,103 @@ public class Java11LanguageAdapter extends AbstractLanguageAdapter {
      * @return go-judge 编译请求体
      */
     @Override
-    protected JSONObject createCompileRequest(String sourceCode) {
-        JSONObject stdin = JSONObject.of("content", "");
+    public JSONObject createCompileRequest(String sourceCode) {
+        SandboxRunRequestForm form = new SandboxRunRequestForm();
+
+        // args
+        form.setArgs(buildCompileArgs());
+
+        // env
+        form.setEnv(List.of(java11.getEnv()));
+
+
+        CompileLimitInfo compileInfo = java11.getCompile();
+
+        // cpu limit
+        form.setCpuLimit(compileInfo.getCpuLimitMs() * 1000_000L);
+
+        // real cpu limit
+        form.setRealCpuLimit(compileInfo.getRealCpuLimitMs() * 1000_000L);
+
+        // memory limit
+        form.setMemoryLimit(compileInfo.getMemoryLimitKb() * 1024L * 1024L);
+
+        // stack limit
+        form.setStackLimit(compileInfo.getStackLimitKb() * 1024L * 1024L);
+
+        // proc limit
+        form.setProcLimit(compileInfo.getProcLimit().longValue());
+
+        // files
+        JSONObject content = JSONObject.of("content", "");
         JSONObject stdout = JSONObject.of(
                 "name", "stdout",
-                "max", java11.getCompile().getStdoutLimitBytes()
+                "max", compileInfo.getStdoutLimitBytes()
         );
         JSONObject stderr = JSONObject.of(
                 "name", "stderr",
-                "max", java11.getCompile().getStderrLimitBytes()
+                "max", compileInfo.getStderrLimitBytes()
         );
-        JSONObject sourceFile = JSONObject.of("content", sourceCode);
-        JSONObject copyIn = JSONObject.of("Main.java", sourceFile);
+        form.setFiles(List.of(content, stdout, stderr));
 
-        // 编译请求携带编译限制，并要求沙箱返回 Main.jar 的缓存 fileId。
-        return buildCommonRequest(
-                buildCompileArgs(),
-                java11.getEnv(),
-                stdin,
-                stdout,
-                stderr,
-                copyIn,
-                java11.getCompile(),
-                null,
-                java11.getActiveCacheFileName()
-        );
+        // copyIn
+        form.setCopyIn(Map.of("Main.java", JSONObject.of("content", sourceCode)));
+
+        form.setCopyOut(List.of("stdout", "stderr"));
+
+        form.setCopyCached(List.of("Main.java"));
+
+        return form.generate();
     }
 
     /**
      * 构造 Java 运行请求。
      *
-     * @param runContext 当前测试点的输入、运行限制和编译产物信息
+     * @param context 当前测试点的输入、运行限制和编译产物信息
      * @return go-judge 运行请求体
      */
     @Override
-    public JSONObject createRunRequest(RunContext runContext) {
-        JSONObject stdin = JSONObject.of("content", runContext.getInput());
+    public JSONObject createRunRequest(RunContext context) {
+        SandboxRunRequestForm form = new SandboxRunRequestForm();
+
+        form.setArgs(buildRunArgs());
+
+        // cpu limit
+        form.setCpuLimit(context.getTimeLimitMs() * 1000_000L);
+
+        // real cpu limit
+        form.setRealCpuLimit(context.getTimeLimitMs() * 3L * 1000_000L);
+
+        // memory limit
+        form.setMemoryLimit(context.getMemoryLimitKb() * 1024L * 1024L);
+
+
+        RunLimitInfo run = java11.getRun();
+
+        // stack limit
+        form.setStackLimit(run.getStackLimitKb() * 1024L * 1024L);
+
+        // proc limit
+        form.setProcLimit(run.getProcLimit().longValue());
+
+        // files
+        JSONObject content = JSONObject.of("content", context.getInput());
         JSONObject stdout = JSONObject.of(
                 "name", "stdout",
-                "max", DEFAULT_RUN_STDOUT_LIMIT_BYTES
+                "max", run.getStdoutLimitBytes()
         );
         JSONObject stderr = JSONObject.of(
                 "name", "stderr",
-                "max", DEFAULT_RUN_STDERR_LIMIT_BYTES
+                "max", run.getStderrLimitBytes()
         );
+        form.setFiles(List.of(content, stdout, stderr));
 
-        JSONObject copyFileName = createProgramCopyIn(runContext.getProgram());
+        // copyIn
+        form.setCopyIn(Map.of("Main.java", context.getActiveFile()));
 
-        // 运行请求只引用已缓存的 jar，不再重复编译，也不创建新的缓存文件。
-        return buildCommonRequest(
-                buildRunArgs(),
-                java11.getEnv(),
-                stdin,
-                stdout,
-                stderr,
-                copyFileName,
-                null,
-                runContext.getLimit(),
-                null
-        );
+        form.setCopyOut(List.of("stdout", "stderr"));
+
+        return form.generate();
     }
 
     /**
