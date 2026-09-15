@@ -93,7 +93,10 @@ public class SandboxRunRequestForm {
 
         cmd.put("memoryLimit", form.getMemoryLimit());
 
-        cmd.put("stackLimit", form.getMemoryLimit());
+        cmd.put("stackLimit", form.getStackLimit());
+
+        // 限制沙箱内的进程和线程数量。
+        cmd.put("procLimit", form.getProcLimit());
 
         cmd.put("files", form.getFiles());
 
@@ -104,7 +107,7 @@ public class SandboxRunRequestForm {
         cmd.put("copyOut", form.getCopyOut());
 
         if(!CollectionUtil.isEmpty(form.getCopyCached())){
-            cmd.put("copyOut", form.getCopyOut());
+            cmd.put("copyCached", form.getCopyCached());
         }
 
         return cmd;
