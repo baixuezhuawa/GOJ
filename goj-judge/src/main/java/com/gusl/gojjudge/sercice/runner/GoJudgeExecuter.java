@@ -1,6 +1,7 @@
 package com.gusl.gojjudge.sercice.runner;
 
 import com.alibaba.fastjson2.JSONArray;
+import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.gusl.gojjudge.client.GoJudgeClient;
 import com.gusl.gojjudge.exception.SystemErrorException;
@@ -26,7 +27,8 @@ public class GoJudgeExecuter {
         try {
             JSONArray response = goJudgeClient.run(request);
 
-            JSONObject result = (JSONObject) response.getFirst();
+            // Feign 的消息转换器可能将 JSONArray 元素反序列化为 LinkedHashMap，统一转回 Fastjson 对象。
+            JSONObject result = JSONObject.parseObject(JSON.toJSONString(response.getFirst()));
 
             sandBoxResult.setStatus(result.getString("status"));
 
@@ -35,6 +37,7 @@ public class GoJudgeExecuter {
             sandBoxResult.setMemory(result.getLong("memory"));
 
             sandBoxResult.setRunTime(result.getLong("runTime"));
+            sandBoxResult.setExitStatus(result.getInteger("exitStatus"));
 
             Map<String, String> files = new HashMap<>();
             result.getJSONObject("files").forEach((k, v) ->
@@ -48,9 +51,9 @@ public class GoJudgeExecuter {
                 result.getJSONObject("fileIds").forEach((k, v) ->
                         fileIds.put(k, (String) v)
                 );
-                sandBoxResult.setFiles(fileIds);
+                sandBoxResult.setFileIds(fileIds);
             }else {
-                sandBoxResult.setFiles(Map.of());
+                sandBoxResult.setFileIds(Map.of());
             }
 
         } catch (Exception e) {
