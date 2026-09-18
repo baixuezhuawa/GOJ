@@ -44,8 +44,11 @@ public class Compiler {
             SandBoxResult sandBoxResult = goJudgeExecuter.execute(compileRequest);
 
             compileResult.setStatus(sandBoxResult.getStatus());
-
-            compileResult.setActiveFile(JSONObject.of("fileId", sandBoxResult.getFileIds().get("fileId")));
+            
+            compileResult.setActiveFile(JSONObject.of(
+                    "fileId",
+                    sandBoxResult.getFileIds().get(adapter.activeFileName())
+            ));
 
             compileResult.setCompileMsg(String.format(
                     "stdout: %s\nstderr: %s",

@@ -95,6 +95,11 @@
         </dependency>
 
         <dependency>
+            <groupId>org.apache.rocketmq</groupId>
+            <artifactId>rocketmq-spring-boot-starter</artifactId>
+        </dependency>
+
+        <dependency>
             <groupId>com.gusl</groupId>
             <artifactId>common</artifactId>
         </dependency>

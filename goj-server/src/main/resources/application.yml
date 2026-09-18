@@ -3,6 +3,9 @@ goj:
     task:
       dispatch-interval-ms: 3000 # 扫描间隔 / ms
       max-attempts: 3  # 最大重试次数
+    rocketmq:
+      topic: GOJ_JUDGE_TASK
+      consumer-group: goj-judge-worker
 
   data-root: D:\ProgramData\goj-data  # 测试数据存放的跟目录, 用于构造测试数据路径
 
@@ -109,3 +112,9 @@ aliyun:
   oss:
     endpoint: https://oss-cn-beijing.aliyuncs.com
     bucketName: gusl
+
+rocketmq:
+  name-server: 192.168.100.128:9876
+  producer:
+    group: goj-server-producer
+    send-message-timeout: 3000

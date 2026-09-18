@@ -118,51 +118,6 @@ public class JudgeServiceImpl implements JudgeService {
     }
 
 
-    /**
-     * 在测评任务死亡后写入业务记录的系统错误终态。
-     */
-    @Override
-    public void markSystemError(String taskType, Long businessId, String errorMessage) {
-        JudgeOutcome outcome = new JudgeOutcome();
-        outcome.setCurStatus(SystemConstant.SYSTEM_ERROR);
-        outcome.setJudgeMsg(errorMessage);
 
-        // 普通测评
-        if (JudgeTaskType.SUBMISSION.equals(taskType)) {
-            Submission submission = submissionMapper.selectById(businessId);
-            if (submission == null) {
-                log.error("普通提交不存在，submissionId={}", businessId);
-                return;
-            }
-
-            submissionResultService.updateSubmission(submission, outcome);
-            return;
-        }
-
-        // 验题
-        if (JudgeTaskType.PROBLEM_REVIEW.equals(taskType)) {
-            ProblemReviewSubmission submission = reviewSubmissionMapper.selectById(businessId);
-            if (submission == null) {
-                log.error("验题提交不存在，submissionId={}", businessId);
-                return;
-            }
-            // 因为是验题, 不需要更新有关用户做题数据的表
-            submissionResultService.updateSubmission(submission, outcome);
-            return;
-        }
-
-        // 比赛提交
-        if (JudgeTaskType.CONTEST_SUBMISSION.equals(taskType)) {
-            ContestSubmission submission = contestSubmissionMapper.selectById(businessId);
-            if (submission == null) {
-                log.error("比赛提交不存在，submissionId={}", businessId);
-                return;
-            }
-            submissionResultService.updateSubmission(submission, outcome);
-            return;
-        }
-
-        log.error("无法写入系统错误，不支持的任务类型：{}", taskType);
-    }
 
 }

@@ -28,6 +28,7 @@
         <springdoc.version>2.8.13</springdoc.version>
         <knife4j-ui.version>4.5.0</knife4j-ui.version>
         <spring-cloud.version>2025.0.0</spring-cloud.version>
+        <rocketmq-spring.version>2.3.6</rocketmq-spring.version>
     </properties>
 
 
@@ -98,6 +99,13 @@
                 <groupId>com.baomidou</groupId>
                 <artifactId>mybatis-plus-jsqlparser-4.9</artifactId>
                 <version>${mybatis-plus.version}</version>
+            </dependency>
+
+            <!-- rocketMQ -->
+            <dependency>
+                <groupId>org.apache.rocketmq</groupId>
+                <artifactId>rocketmq-spring-boot-starter</artifactId>
+                <version>${rocketmq-spring.version}</version>
             </dependency>
 
         </dependencies>

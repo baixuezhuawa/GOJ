@@ -13,11 +13,13 @@ import com.gusl.gojjudge.sercice.testcase.LocalFileTestCaseProvider;
 import com.gusl.gojjudge.sercice.checker.OutputCheckerRegistry;
 import com.gusl.gojjudge.sercice.runner.Runner;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
  * 普通测评策略, 样例点
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class NormalJudgeStrategy implements JudgeStrategy {
@@ -66,15 +68,24 @@ public class NormalJudgeStrategy implements JudgeStrategy {
 
         try {
 
+            log.info("running");
+
             for(int caseNo = 1; caseNo <= testDataRef.getTestCaseCount(); caseNo++){
                 // 加载测试数据
                 TestCase testCase = reader.read(caseNo);
 
                 RunContext runContext = RunContext.builder()
                         .input(testCase.getInput())
+                        .activeFile(context.getCompileResult().getActiveFile())
                         .memoryLimitKb(request.getMemoryLimitKb())
                         .timeLimitMs(request.getTimeLimitMs())
                         .build();
+
+                log.info("compileResult={}, activeFile={}",
+                        context.getCompileResult(),
+                        context.getCompileResult() == null
+                                ? null
+                                : context.getCompileResult().getActiveFile());
 
                 // 获取运行结果
                 RunResult runResult = runner.run(adapter, runContext);
@@ -129,7 +140,7 @@ public class NormalJudgeStrategy implements JudgeStrategy {
                 }
             }
         } catch (Exception e) {
-            throw new SystemErrorException("系统异常: " + e.getMessage());
+            throw new SystemErrorException("系统异常: " + e.getMessage(), e);
         }
 
         judgeResult.setTimeMs(maxTime);

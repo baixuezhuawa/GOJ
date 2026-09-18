@@ -3,9 +3,15 @@ package com.gusl.gojjudge.sercice.application;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.gusl.common.constant.JudgeTaskStatus;
-import com.gusl.common.pojo.entity.JudgeTask;
-import com.gusl.common.pojo.entity.JudgeTaskMessage;
+import com.gusl.common.constant.JudgeTaskType;
+import com.gusl.common.constant.SystemConstant;
+import com.gusl.common.pojo.entity.*;
+import com.gusl.gojjudge.mapper.ContestSubmissionMapper;
 import com.gusl.gojjudge.mapper.JudgeTaskMapper;
+import com.gusl.gojjudge.mapper.ProblemReviewSubmissionMapper;
+import com.gusl.gojjudge.mapper.SubmissionMapper;
+import com.gusl.gojjudge.pojo.entity.JudgeOutcome;
+import com.gusl.gojjudge.sercice.submission.SubmissionResultService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,6 +32,12 @@ public class JudgeTaskFailureService {
     private final JudgeTaskMapper judgeTaskMapper;
 
     private final JudgeService judgeService;
+
+    private final SubmissionResultService submissionResultService;
+
+    private final SubmissionMapper submissionMapper;
+    private final ContestSubmissionMapper contestSubmissionMapper;
+    private final ProblemReviewSubmissionMapper reviewSubmissionMapper;
 
     /** 当前 Judge 实例标识。 */
     @Value("${goj.judge.worker-name}")
@@ -67,7 +79,7 @@ public class JudgeTaskFailureService {
         下面这个判断就为了解决这个数据不一致时, 防止重复测评的判断.
          */
         if (judgeService.isBusinessTerminal(task.getTaskType(), task.getBusinessId())) {
-            markSucceeded(task, null);
+            markSucceeded(task);
             return;
         }
 
@@ -147,20 +159,15 @@ public class JudgeTaskFailureService {
         );
 
         // 与 judge_task 的 DEAD 状态处于同一个数据库事务中。
-        judgeService.markSystemError(
-                task.getTaskType(),
-                task.getBusinessId(),
-                errorMessage
-        );
+        markSystemError(task.getTaskType(), task.getBusinessId(), errorMessage);
     }
 
     /**
      * 当业务终态已经落库时补齐任务成功状态。
      *
      * @param task 当前任务
-     * @param expiredBefore 非空时要求任务租约已经过期
      */
-    private void markSucceeded(JudgeTask task, LocalDateTime expiredBefore) {
+    private void markSucceeded(JudgeTask task) {
         int affectedRows = judgeTaskMapper.update(
                 Wrappers.<JudgeTask>lambdaUpdate()
                         .set(JudgeTask::getStatus, JudgeTaskStatus.SUCCEEDED)
@@ -171,11 +178,57 @@ public class JudgeTaskFailureService {
                         .eq(JudgeTask::getId, task.getId())
                         .eq(JudgeTask::getStatus, JudgeTaskStatus.PROCESSING)
                         .eq(JudgeTask::getLeaseOwner, task.getLeaseOwner())
-                        .le(expiredBefore != null, JudgeTask::getLeaseExpireTime, expiredBefore)
         );
 
         if (affectedRows != 1) {
             log.info("业务已终态但任务成功状态未补齐，可能已经被其他线程处理，taskId={}", task.getId());
         }
+    }
+
+
+    /**
+     * 在测评任务死亡后写入业务记录的系统错误终态。
+     */
+    private void markSystemError(String taskType, Long businessId, String errorMessage) {
+        JudgeOutcome outcome = new JudgeOutcome();
+        outcome.setCurStatus(SystemConstant.SYSTEM_ERROR);
+        outcome.setJudgeMsg(errorMessage);
+
+        // 普通测评
+        if (JudgeTaskType.SUBMISSION.equals(taskType)) {
+            Submission submission = submissionMapper.selectById(businessId);
+            if (submission == null) {
+                log.error("普通提交不存在，submissionId={}", businessId);
+                return;
+            }
+
+            submissionResultService.updateSubmission(submission, outcome);
+            return;
+        }
+
+        // 验题
+        if (JudgeTaskType.PROBLEM_REVIEW.equals(taskType)) {
+            ProblemReviewSubmission submission = reviewSubmissionMapper.selectById(businessId);
+            if (submission == null) {
+                log.error("验题提交不存在，submissionId={}", businessId);
+                return;
+            }
+            // 因为是验题, 不需要更新有关用户做题数据的表
+            submissionResultService.updateSubmission(submission, outcome);
+            return;
+        }
+
+        // 比赛提交
+        if (JudgeTaskType.CONTEST_SUBMISSION.equals(taskType)) {
+            ContestSubmission submission = contestSubmissionMapper.selectById(businessId);
+            if (submission == null) {
+                log.error("比赛提交不存在，submissionId={}", businessId);
+                return;
+            }
+            submissionResultService.updateSubmission(submission, outcome);
+            return;
+        }
+
+        log.error("无法写入系统错误，不支持的任务类型：{}", taskType);
     }
 }

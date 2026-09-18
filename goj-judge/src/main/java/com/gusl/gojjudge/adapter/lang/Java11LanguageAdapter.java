@@ -90,7 +90,8 @@ public class Java11LanguageAdapter extends AbstractLanguageAdapter {
 
         form.setCopyOut(List.of("stdout", "stderr"));
 
-        form.setCopyCached(List.of("Main.java"));
+        // 缓存编译生成的 JAR，供测试点运行时使用。
+        form.setCopyCached(List.of(java11.getActiveCacheFileName()));
 
         return form.generate();
     }
@@ -138,7 +139,7 @@ public class Java11LanguageAdapter extends AbstractLanguageAdapter {
         form.setFiles(List.of(content, stdout, stderr));
 
         // copyIn
-        form.setCopyIn(Map.of("Main.java", context.getActiveFile()));
+        form.setCopyIn(Map.of(java11.getActiveCacheFileName(), context.getActiveFile()));
 
         form.setCopyOut(List.of("stdout", "stderr"));
 

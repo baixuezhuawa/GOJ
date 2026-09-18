@@ -107,7 +107,8 @@ public class SandboxRunRequestForm {
         cmd.put("copyOut", form.getCopyOut());
 
         if(!CollectionUtil.isEmpty(form.getCopyCached())){
-            cmd.put("copyCached", form.getCopyCached());
+            // go-judge 使用 copyOutCached 指定需要缓存的输出文件。
+            cmd.put("copyOutCached", form.getCopyCached());
         }
 
         return cmd;

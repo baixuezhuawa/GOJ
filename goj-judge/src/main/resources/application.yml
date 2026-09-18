@@ -1,5 +1,10 @@
 goj:
   judge:
+    redis-consumer-enabled: false
+    rocketmq:
+      enabled: true
+      topic: GOJ_JUDGE_TASK
+      consumer-group: goj-judge-worker
     dispatch:
       slot-max-wait-time-ms: 100
       scan-interval: 2
@@ -121,3 +126,6 @@ springdoc:
         - /**
       packages-to-scan:
         - com.gusl.gojjudge.controller
+
+rocketmq:
+  name-server: 192.168.100.128:9876

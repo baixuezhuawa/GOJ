@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
  * 发布任务到 Redis 队列
  */
 @Slf4j
-@Component
+//@Component
 @RequiredArgsConstructor
 public class RedisJudgeTaskPublisher implements JudgeTaskPublisher {
 

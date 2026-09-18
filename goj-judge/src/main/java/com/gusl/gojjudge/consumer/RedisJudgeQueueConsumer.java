@@ -4,6 +4,7 @@ package com.gusl.gojjudge.consumer;
 import com.gusl.gojjudge.sercice.application.JudgeService;
 import com.gusl.gojjudge.sercice.application.JudgeQueueDispatcher;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -19,7 +20,12 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-public class JudgeQueueConsumer {
+@ConditionalOnProperty(
+        prefix = "goj.judge",
+        name = "redis-consumer-enabled",
+        havingValue = "true"
+)
+public class RedisJudgeQueueConsumer {
 
 
 
@@ -31,7 +37,7 @@ public class JudgeQueueConsumer {
 
 
     /** 构造函数 */
-    public JudgeQueueConsumer(
+    public RedisJudgeQueueConsumer(
             JudgeQueueDispatcher judgeQueueDispatcher,
             @Qualifier("judgeConsumerExecutor") TaskExecutor judgeConsumerExecutor
     ) {
