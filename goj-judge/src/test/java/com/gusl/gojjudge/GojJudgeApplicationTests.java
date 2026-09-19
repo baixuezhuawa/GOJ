@@ -2,11 +2,11 @@ package com.gusl.gojjudge;
 
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
-import com.gusl.gojjudge.adapter.lang.Java11LanguageAdapter;
-import com.gusl.gojjudge.adapter.lang.Py3LanguageAdapter;
-import com.gusl.gojjudge.client.GoJudgeClient;
-import com.gusl.gojjudge.pojo.entity.CompilePlan;
-import com.gusl.gojjudge.pojo.entity.RunContext;
+import com.gusl.gojjudge.judging.infrastructure.language.Java11LanguageAdapter;
+import com.gusl.gojjudge.judging.infrastructure.language.Py3LanguageAdapter;
+import com.gusl.gojjudge.judging.infrastructure.sandbox.GoJudgeClient;
+import com.gusl.gojjudge.judging.infrastructure.compiler.CompilePlan;
+import com.gusl.gojjudge.judging.infrastructure.runner.RunContext;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

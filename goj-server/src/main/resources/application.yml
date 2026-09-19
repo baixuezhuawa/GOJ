@@ -76,7 +76,12 @@ spring:
 logging:
   level:
     com.gusl: debug
-    com.gusl.gojserver.mapper: warn
+    com.gusl.gojserver.account.infrastructure.persistence: warn
+    com.gusl.gojserver.profile.infrastructure.persistence: warn
+    com.gusl.gojserver.problem.infrastructure.persistence: warn
+    com.gusl.gojserver.submission.infrastructure.persistence: warn
+    com.gusl.gojserver.contest.infrastructure.persistence: warn
+    com.gusl.gojserver.judgetask.infrastructure.persistence: warn
     org.springframework: warn
 
 
@@ -98,7 +103,7 @@ springdoc:
       paths-to-match:
         - /**
       packages-to-scan:
-        - com.gusl.gojserver.controller
+        - com.gusl.gojserver
 
 security:
   token:

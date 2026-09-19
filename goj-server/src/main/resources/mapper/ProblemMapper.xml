@@ -2,10 +2,10 @@
 <!DOCTYPE mapper
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.gusl.gojserver.mapper.ProblemMapper">
+<mapper namespace="com.gusl.gojserver.problem.infrastructure.persistence.ProblemMapper">
 
 
-    <select id="selectPendingReviews" resultType="com.gusl.gojserver.pojo.vo.AdminProblemReviewListVo">
+    <select id="selectPendingReviews" resultType="com.gusl.gojserver.problem.application.vo.AdminProblemReviewListVo">
         select p.id           as problemId,
                p.problem_name as problemName,
                u.id           as userId,
@@ -17,7 +17,7 @@
         order by p.create_time asc, p.id asc
     </select>
 
-    <select id="selectProblemPage" resultType="com.gusl.gojserver.pojo.vo.ProblemPageListVo">
+    <select id="selectProblemPage" resultType="com.gusl.gojserver.problem.application.vo.ProblemPageListVo">
         SELECT
             p.id AS problemId,
             p.problem_name AS problemName,
@@ -73,7 +73,7 @@
         ORDER BY p.id ASC
     </select>
 
-    <select id="selectProblemPageByAdmin" resultType="com.gusl.gojserver.pojo.vo.AdminProblemPageListVo">
+    <select id="selectProblemPageByAdmin" resultType="com.gusl.gojserver.problem.application.vo.AdminProblemPageListVo">
         SELECT
             p.id AS problemId,
             p.problem_name AS problemName,

@@ -1,6 +1,6 @@
 package com.gusl.gojserver;
 
-import com.gusl.gojserver.config.properties.SubmissionProperties;
+import com.gusl.gojserver.shared.infrastructure.config.properties.SubmissionProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;

@@ -2,7 +2,7 @@
 <!DOCTYPE mapper
         PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.gusl.gojserver.mapper.TagMapper">
+<mapper namespace="com.gusl.gojserver.problem.infrastructure.persistence.TagMapper">
     <insert id="addTagToProblem">
         insert problem_tag (problem_id, tag_id) values (#{problemId}, #{tagId})
     </insert>
@@ -17,7 +17,7 @@
         order by pt.tag_id asc
     </select>
 
-    <select id="getTagsByProblemIds" resultType="com.gusl.gojserver.pojo.vo.ProblemTagRow">
+    <select id="getTagsByProblemIds" resultType="com.gusl.gojserver.problem.application.vo.ProblemTagRow">
         select pt.problem_id as problemId,
                t.tag_name as tagName
         from problem_tag pt
@@ -29,7 +29,7 @@
         order by pt.problem_id asc, pt.tag_id asc
     </select>
 
-    <select id="getTagsByProblemId" resultType="com.gusl.gojserver.pojo.vo.ProblemTagsVo">
+    <select id="getTagsByProblemId" resultType="com.gusl.gojserver.problem.application.vo.ProblemTagsVo">
         select t.id tagId,
                t.tag_name tagName
         from problem_tag pt

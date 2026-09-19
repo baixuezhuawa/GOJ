@@ -79,13 +79,30 @@ in queue -> wait -> compiling（仅编译型语言）-> running
 ```text
 GOJ
 ├─ common       公共返回模型、常量及 Problem、Submission 等共享实体
-├─ goj-server   用户、题目、提交 API，以及认证和任务入队
-├─ goj-judge    Redis 队列消费、语言适配、判题编排和沙箱调用
+├─ goj-server   用户、题目、提交、比赛 API，以及认证和任务调度
+│  └─ com.gusl.gojserver
+│     ├─ account     账号、登录和安全认证
+│     ├─ profile     个人统计与进度查询
+│     ├─ problem     题目、测试数据和审核
+│     ├─ submission  普通提交
+│     ├─ contest     比赛、报名、比赛提交和排名
+│     ├─ judgetask   判题任务管理与消息发布
+│     └─ shared      通用配置、分页、异常处理和监控
+├─ goj-judge    消息消费、语言适配、判题编排和沙箱调用
+│  └─ com.gusl.gojjudge
+│     ├─ task        消息接入、任务领取、重试和租约恢复
+│     └─ judging     判题编排、结果写回、语言适配和沙箱调用
 ├─ sql
 │  ├─ schema.sql  数据库表结构
 │  └─ data.sql    开发环境角色、权限、题目和测试数据元信息
 └─ pom.xml      Maven 聚合父工程
 ```
+
+业务模块内按 `interfaces`、`application`、`domain`、`infrastructure` 组织已有代码。Server 的 DTO/VO 放在所属业务模块的 `application/dto`、`application/vo`，共享实体继续由 `common` 提供；Mapper XML 保留在各模块的 `src/main/resources/mapper` 下，namespace 和结果类型对应迁移后的 Java 包。
+
+首次切换到新包结构时执行 Maven `clean` 后重新构建，避免旧包的 class 文件残留导致重复注册组件。
+
+包名迁移后的首次切换需要注意 Redis 中的旧数据：登录态和排行榜快照采用包含 Java 全类名的序列化格式。旧登录态需要重新登录，旧排行榜快照需等待 TTL 过期或按对应 key 清理后重建；不要清空整个 Redis 数据库。
 
 ## 运行环境
 
