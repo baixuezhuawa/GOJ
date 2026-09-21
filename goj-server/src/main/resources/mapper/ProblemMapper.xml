@@ -5,18 +5,6 @@
 <mapper namespace="com.gusl.gojserver.problem.infrastructure.persistence.ProblemMapper">
 
 
-    <select id="selectPendingReviews" resultType="com.gusl.gojserver.problem.application.vo.AdminProblemReviewListVo">
-        select p.id           as problemId,
-               p.problem_name as problemName,
-               u.id           as userId,
-               u.username,
-               p.create_time  as createTime
-        from problem p
-                 left join sys_user u on p.author_id = u.id
-        where p.status = #{status}
-        order by p.create_time asc, p.id asc
-    </select>
-
     <select id="selectProblemPage" resultType="com.gusl.gojserver.problem.application.vo.ProblemPageListVo">
         SELECT
             p.id AS problemId,

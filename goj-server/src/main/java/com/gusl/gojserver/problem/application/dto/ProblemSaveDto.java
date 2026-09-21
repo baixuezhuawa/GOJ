@@ -1,12 +1,14 @@
 package com.gusl.gojserver.problem.application.dto;
 
-import com.baomidou.mybatisplus.annotation.TableField;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
-@Schema(name = "问题简单草稿")
+/**
+ * 管理员题目信息请求，创建和编辑共用。
+ */
+@Schema(name = "管理员题目信息")
 @Data
-public class ProblemDraftDto {
+public class ProblemSaveDto {
 
     /** 题目标题 */
     @Schema(description = "题目名称")
@@ -29,7 +31,6 @@ public class ProblemDraftDto {
     private String inputDescription;
 
     /** 输出格式描述 */
-    @TableField("output_description")
     @Schema(description = "输出描述")
     private String outPutDescription;
 
@@ -38,7 +39,6 @@ public class ProblemDraftDto {
     private String inputExample;
 
     /** 公开输出样例 */
-    @TableField("output_example")
     @Schema(description = "输出样例")
     private String outPutExample;
 

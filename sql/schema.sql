@@ -119,7 +119,7 @@ CREATE TABLE `problem`
     `difficulty`         INT UNSIGNED     NOT NULL DEFAULT 0 COMMENT '题目难度分',
     `author_id`          BIGINT           NOT NULL COMMENT '出题人用户 id',
     `status`             TINYINT UNSIGNED NOT NULL DEFAULT 0
-        COMMENT '题目状态：0 草稿，1 已发布，2 已停用，3 待审核，4 已退回，5 准备中',
+        COMMENT '题目状态：0 草稿，1 已发布，2 已停用',
 
     `create_by`          VARCHAR(64)               DEFAULT NULL COMMENT '创建人',
     `create_time`        DATETIME         NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -142,13 +142,12 @@ CREATE TABLE `problem_test_data`
 (
     `id`              BIGINT           NOT NULL AUTO_INCREMENT COMMENT '测试数据集 id',
     `problem_id`      BIGINT           NOT NULL COMMENT '题目 id',
-    `version`         INT UNSIGNED COMMENT '测试数据版本',
+    `version`         INT UNSIGNED NOT NULL COMMENT '管理员指定的测试数据版本',
     `test_node_count` INT UNSIGNED     NOT NULL DEFAULT 0 COMMENT '测试点数量',
     `archive_name`    VARCHAR(255)     NOT NULL COMMENT '原始压缩包名称',
+    `archive_path`    VARCHAR(512)              DEFAULT NULL COMMENT '原始 ZIP 的相对路径，历史数据可为空',
     `storage_path`    VARCHAR(512) COMMENT '测试数据目录的相对路径',
     `archive_sha256`  CHAR(64)                  DEFAULT NULL COMMENT '压缩包 SHA-256',
-    `status`          VARCHAR(16)      NOT NULL DEFAULT 'UPLOADING'
-        COMMENT '状态：UPLOADING、UPLOADED、EXTRACTED、READY、INVALID、RETIRED',
     `active`          TINYINT UNSIGNED NOT NULL DEFAULT 0
         COMMENT '是否为当前启用版本：1 是，0 否',
     `create_by`       VARCHAR(64)               DEFAULT NULL COMMENT '创建人',
@@ -239,7 +238,7 @@ DROP TABLE IF EXISTS `problem_review_submission`;
 CREATE TABLE `problem_review_submission`
 (
     `id`                   BIGINT       NOT NULL AUTO_INCREMENT COMMENT '验题提交 id',
-    `problem_id`           BIGINT       NOT NULL COMMENT '待审核题目 id',
+    `problem_id`           BIGINT       NOT NULL COMMENT '题目 id',
     `problem_test_data_id` BIGINT       NOT NULL COMMENT '本次验题使用的测试数据集 id',
     `reviewer_id`          BIGINT       NOT NULL COMMENT '执行验题的管理员 id',
     `language`             VARCHAR(32)  NOT NULL COMMENT '编程语言编码',

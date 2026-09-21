@@ -1,35 +1,24 @@
 package com.gusl.gojserver.problem.application;
 
-import com.baomidou.mybatisplus.extension.service.IService;
 import com.gusl.common.pojo.entity.ProblemTestData;
-import com.gusl.gojserver.account.infrastructure.security.LoginUser;
+import org.springframework.core.io.Resource;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
+/** 测试数据服务，管理员直接管理版本和启用标记。 */
+public interface ProblemTestDataService {
 
-public interface ProblemTestDataService extends IService<ProblemTestData> {
+    /** 保存指定版本；版本已存在时替换内容并保留原启用标记。 */
+    Long saveTestData(Long problemId, Integer version, MultipartFile file, String remark);
 
-    /**
-     * 上传测试数据
-     * @param problemId 问题id
-     * @param file 测试数据.zip
-     * @param loginUser 登录用户
-     */
-    void uploadTestData(Long problemId, MultipartFile file, LoginUser loginUser) throws IOException;
+    /** 设置启用标记；启用一个版本时关闭同题其他版本。 */
+    void setTestDataActive(Long problemId, Integer version, boolean active);
 
-    /**
-     * 草稿阶段替换测试数据
-     */
-    void updateTestDataWithdraw(Long problemId, MultipartFile data, LoginUser loginUser) throws IOException;
+    /** 删除指定版本，不限制其启用状态和历史引用。 */
+    void deleteTestData(Long problemId, Integer version);
 
-    /** 获取测试数据下一个版本 */
-    int nextVersion(Long problemId);
+    /** 获取指定版本的原始 ZIP。 */
+    Resource getArchive(Long problemId, Integer version);
 
-    /** 管理员上传测试数据 */
-    void uploadTestDataByAdmin(Long problemId, MultipartFile data, String remark);
-
-
-    void enableProblemTestDataVersion(Long problemId, Integer version);
-
-    void deleteProblemTestDataVersion(Long problemId, Integer version);
+    /** 获取当前启用数据，并确认解压文件仍然可读。 */
+    ProblemTestData requireActiveTestData(Long problemId);
 }

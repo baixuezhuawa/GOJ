@@ -20,8 +20,11 @@ public class ProblemTestDataListVo {
     @Schema(description = "测试点数")
     private Integer testNodeCount;
 
-    @Schema(description = "状态")
-    private String status;
+    @Schema(description = "原始 ZIP 文件名")
+    private String archiveName;
+
+    @Schema(description = "原始 ZIP 的 SHA-256")
+    private String archiveSha256;
 
     @Schema(description = "是否启用")
     private boolean active;

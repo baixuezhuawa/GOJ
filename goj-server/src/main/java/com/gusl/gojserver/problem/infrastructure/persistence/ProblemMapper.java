@@ -6,24 +6,12 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.gusl.common.pojo.entity.Problem;
 import com.gusl.gojserver.problem.application.dto.ProblemPageListDto;
 import com.gusl.gojserver.problem.application.vo.AdminProblemPageListVo;
-import com.gusl.gojserver.problem.application.vo.AdminProblemReviewListVo;
 import com.gusl.gojserver.problem.application.vo.ProblemPageListVo;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 @Mapper
 public interface ProblemMapper extends BaseMapper<Problem> {
-
-    /**
-     * 分页查询待审核题目。
-     *
-     * @param status 题目状态
-     * @return 待审核题目列表
-     */
-    IPage<AdminProblemReviewListVo> selectPendingReviews(
-            @Param("page") Page<AdminProblemReviewListVo> page,
-            @Param("status") Integer status
-    );
 
     /**
      * 分页查询公开题目列表。

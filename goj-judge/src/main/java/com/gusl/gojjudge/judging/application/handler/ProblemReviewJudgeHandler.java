@@ -46,15 +46,12 @@ public class ProblemReviewJudgeHandler implements SubmissionJudgeHandler {
         if (JudgingConstant.TERMINAL_STATUSES.contains(submission.getStatus())) {
             return new LoadedSubmissionJudgeContext(null, (task, outcome) -> false, true);
         }
-        Problem problem = problemMapper.selectOne(Wrappers.<Problem>lambdaQuery()
-                .eq(Problem::getId, submission.getProblemId()).eq(Problem::getStatus, ProblemStatus.PENDING));
+        Problem problem = problemMapper.selectById(submission.getProblemId());
         ProblemTestData testData = problemTestDataMapper.selectOne(Wrappers.<ProblemTestData>lambdaQuery()
                 .eq(ProblemTestData::getId, submission.getProblemTestDataId())
-                .eq(ProblemTestData::getProblemId, submission.getProblemId())
-                .eq(ProblemTestData::getActive, false)
-                .eq(ProblemTestData::getStatus, ProblemTestDataStatus.EXTRACTED));
+                .eq(ProblemTestData::getProblemId, submission.getProblemId()));
         if (problem == null || testData == null) {
-            throw new JudgeSystemException("无法加载待审核题目或测试数据");
+            throw new JudgeSystemException("题目或测试数据已不存在");
         }
         CheckerConfig checkerConfig = new CheckerConfig();
         checkerConfig.setCheckType(CheckType.TEXT);

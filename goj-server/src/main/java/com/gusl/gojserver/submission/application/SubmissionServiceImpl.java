@@ -245,7 +245,6 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
         Long count = problemTestDataMapper.selectCount(
                 Wrappers.<ProblemTestData>lambdaQuery()
                         .eq(ProblemTestData::getProblemId, problemId)
-                        .eq(ProblemTestData::getStatus, ProblemTestDataStatus.READY)
                         .eq(ProblemTestData::getActive, true)
         );
         if (count != 1) {

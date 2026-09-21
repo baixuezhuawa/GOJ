@@ -11,7 +11,6 @@ import com.gusl.common.common.PageQuery;
 import com.gusl.common.common.PageResult;
 import com.gusl.common.constant.ContestProblemStatus;
 import com.gusl.common.constant.ContestStatus;
-import com.gusl.common.constant.ProblemTestDataStatus;
 import com.gusl.common.pojo.entity.*;
 import com.gusl.gojserver.contest.infrastructure.persistence.ContestMapper;
 import com.gusl.gojserver.contest.infrastructure.persistence.ContestParticipateMapper;
@@ -283,7 +282,6 @@ public class ContestServiceImpl extends ServiceImpl<ContestMapper, Contest> impl
                 Wrappers.<ProblemTestData>lambdaQuery()
                         .eq(ProblemTestData::getProblemId, vo.getProblemId())
                         .eq(ProblemTestData::getActive, 1)
-                        .eq(ProblemTestData::getStatus, ProblemTestDataStatus.READY)
         );
         if(testData == null){
             throw new BaseException("找不到合适的测试数据");

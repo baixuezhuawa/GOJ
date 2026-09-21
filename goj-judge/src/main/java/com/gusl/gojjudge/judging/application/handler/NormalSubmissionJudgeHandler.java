@@ -52,6 +52,10 @@ public class NormalSubmissionJudgeHandler implements SubmissionJudgeHandler {
         }
         Problem problem = problemMapper.selectById(submission.getProblemId());
 
+        if (problem == null) {
+            throw new JudgeSystemException("题目已不存在");
+        }
+
         request.setLanguage(submission.getLanguage());
         request.setSourceCode(submission.getSourceCode());
         request.setTimeLimitMs(problem.getTimeLimit().longValue());
@@ -67,8 +71,10 @@ public class NormalSubmissionJudgeHandler implements SubmissionJudgeHandler {
                 Wrappers.<ProblemTestData>lambdaQuery()
                         .eq(ProblemTestData::getProblemId, problem.getId())
                         .eq(ProblemTestData::getActive, 1)
-                        .eq(ProblemTestData::getStatus, ProblemTestDataStatus.READY)
         );
+        if (testData == null) {
+            throw new JudgeSystemException("题目没有已启用的测试数据");
+        }
         TestDataRef testDataRef = TestDataRef.builder()
                 .problemId(problem.getId())
                 .storagePath(testData.getStoragePath())

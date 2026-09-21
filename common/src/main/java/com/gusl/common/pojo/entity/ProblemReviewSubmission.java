@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * 管理员验题提交实体，独立保存待审核题目的验题代码和测评结果。
+ * 管理员验题提交实体，独立保存题目的验题代码和测评结果。
  */
 @EqualsAndHashCode(callSuper = true)
 @Data
@@ -28,7 +28,7 @@ public class ProblemReviewSubmission extends BaseEntity {
     @TableId(value = "id", type = IdType.AUTO)
     private Long id;
 
-    /** 待审核题目 id。 */
+    /** 题目 id。 */
     private Long problemId;
 
     /** 本次验题使用的测试数据集 id。 */

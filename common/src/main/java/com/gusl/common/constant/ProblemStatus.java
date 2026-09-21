@@ -17,12 +17,4 @@ public final class ProblemStatus {
     /** 已停用。 */
     public static final Integer DISABLE = 2;
 
-    /** 待管理员审核。 */
-    public static final Integer PENDING = 3;
-
-    /** 审核未通过，已退回给作者。 */
-    public static final Integer WITHDRAW = 4;
-
-    /** 准备状态, 可以用于准备比赛题目 */
-    public static final Integer PREPARE = 5;
 }

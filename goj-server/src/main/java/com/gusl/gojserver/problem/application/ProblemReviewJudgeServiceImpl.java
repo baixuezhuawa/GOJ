@@ -51,19 +51,19 @@ public class ProblemReviewJudgeServiceImpl
             throw new BaseException("验题请求不能为空");
         }
 
-        // 管理员只能为仍处于待审核状态的题目创建验题任务。
-        requirePendingProblem(problemId);
+        // 管理员可对任意状态的题目验题。
+        requireProblem(problemId);
 
         // 固定本次任务使用的测试数据集，避免 Worker 再按题目状态猜测数据来源。
-        ProblemTestData testData = requirePendingTestData(problemId);
+        ProblemTestData testData = requireTestData(problemId, dto.getVersion());
 
         // 执行普通提交与验题提交共同的语言、源码和摘要校验。
         String sha256 = judgeSourceValidator.validateAndHash(dto.getLanguage(), dto.getSourceCode());
-        requireNoRecentDuplicate(problemId, loginUser.getUserId(), dto.getLanguage(), sha256);
 
         return enqueueSubmission(problemId, testData, loginUser.getUserId(), sha256, dto.getLanguage(), dto.getSourceCode());
     }
 
+    /** 保存验题提交和可调度任务。 */
     private Long enqueueSubmission(
             Long problemId,
             ProblemTestData data,
@@ -72,7 +72,7 @@ public class ProblemReviewJudgeServiceImpl
             String language,
             String sourceCode
     ){
-        // 写入独立验题表，并把验题记录 id 放入独立 Redis 队列。
+        // 写入独立验题表和任务表，由任务调度器投递 Redis 队列。
         ProblemReviewSubmission submission = ProblemReviewSubmission.builder()
                 .problemId(problemId)
                 .problemTestDataId(data.getId())
@@ -110,54 +110,34 @@ public class ProblemReviewJudgeServiceImpl
     }
 
     /**
-     * 校验题目仍处于待审核状态。
+     * 校验题目存在。
      */
-    private void requirePendingProblem(Long problemId) {
+    private void requireProblem(Long problemId) {
         if (problemId == null) {
             throw new BaseException("题目 id 不能为空");
         }
         Long count = problemMapper.selectCount(
                 Wrappers.<Problem>lambdaQuery()
                         .eq(Problem::getId, problemId)
-                        .eq(Problem::getStatus, ProblemStatus.PENDING)
         );
         if (count != 1) {
-            throw new BaseException("待审核题目不存在或已被处理");
+            throw new BaseException("题目不存在");
         }
     }
 
-    /**
-     * 获取最近一次完成结构校验的待审核测试数据。
-     */
-    private ProblemTestData requirePendingTestData(Long problemId) {
+    /** 获取管理员指定的数据版本，不要求启用，也不依赖题目状态。 */
+    private ProblemTestData requireTestData(Long problemId, Integer version) {
+        if (version == null || version <= 0) {
+            throw new BaseException("请选择验题使用的测试数据版本");
+        }
         ProblemTestData testData = problemTestDataMapper.selectOne(
                 Wrappers.<ProblemTestData>lambdaQuery()
                         .eq(ProblemTestData::getProblemId, problemId)
-                        .eq(ProblemTestData::getActive, false)
-                        .eq(ProblemTestData::getStatus, ProblemTestDataStatus.EXTRACTED)
-                        .orderByDesc(ProblemTestData::getId)
-                        .last("LIMIT 1")
+                        .eq(ProblemTestData::getVersion, version)
         );
         if (testData == null) {
-            throw new BaseException("题目没有可供验题的测试数据");
+            throw new BaseException("测试数据版本不存在");
         }
         return testData;
-    }
-
-    /**
-     * 拒绝管理员在两分钟内重复提交相同验题代码。
-     */
-    private void requireNoRecentDuplicate(Long problemId, Long reviewerId, String language, String sha256) {
-        Long count = reviewSubmissionMapper.selectCount(
-                Wrappers.<ProblemReviewSubmission>lambdaQuery()
-                        .eq(ProblemReviewSubmission::getProblemId, problemId)
-                        .eq(ProblemReviewSubmission::getReviewerId, reviewerId)
-                        .eq(ProblemReviewSubmission::getLanguage, language)
-                        .eq(ProblemReviewSubmission::getSourceSha256, sha256)
-                        .ge(ProblemReviewSubmission::getSubmissionTime, LocalDateTime.now().minusMinutes(2))
-        );
-        if (count > 0) {
-            throw new BaseException("近两分钟内有重复验题提交");
-        }
     }
 }

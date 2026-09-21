@@ -10,6 +10,9 @@ import lombok.Data;
 @Data
 public class ProblemReviewJudgeDto {
 
+    @Schema(description = "测试数据版本")
+    private Integer version;
+
     @Schema(description = "语言编码", example = "java11")
     private String language;
 

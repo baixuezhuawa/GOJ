@@ -38,10 +38,7 @@ public class CommonController extends BaseController {
         List<ProblemStatusVo> statusList = List.of(
                 new ProblemStatusVo(ProblemStatus.DRAFT, "草稿"),
                 new ProblemStatusVo(ProblemStatus.PUBLISH, "已发布"),
-                new ProblemStatusVo(ProblemStatus.DISABLE, "已停用"),
-                new ProblemStatusVo(ProblemStatus.PENDING, "待审核"),
-                new ProblemStatusVo(ProblemStatus.WITHDRAW, "已退回"),
-                new ProblemStatusVo(ProblemStatus.PREPARE, "准备中")
+                new ProblemStatusVo(ProblemStatus.DISABLE, "已停用")
         );
         return success("操作成功", statusList);
     }

@@ -14,8 +14,8 @@ public interface ProblemReviewJudgeService extends IService<ProblemReviewSubmiss
     /**
      * 创建管理员验题任务。
      *
-     * @param problemId 待审核题目 id
-     * @param dto 语言和验题代码
+     * @param problemId 题目 id
+     * @param dto 数据版本、语言和验题代码
      * @param loginUser 当前管理员
      * @return 验题提交 id
      */

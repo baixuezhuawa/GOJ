@@ -1,47 +1,38 @@
 package com.gusl.gojserver.problem.application;
 
 import cn.hutool.core.bean.BeanUtil;
-import cn.hutool.core.io.FileUtil;
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.gusl.common.common.BaseException;
-import com.gusl.common.common.PageQuery;
 import com.gusl.common.common.PageResult;
 import com.gusl.common.constant.ProblemProgressStatus;
 import com.gusl.common.constant.ProblemStatus;
 import com.gusl.common.pojo.entity.ProblemTestData;
 import com.gusl.common.utils.StringUtils;
-import com.gusl.gojserver.shared.infrastructure.config.properties.SysProperties;
 import com.gusl.gojserver.problem.infrastructure.persistence.ProblemMapper;
 import com.gusl.gojserver.problem.infrastructure.persistence.ProblemTestDataMapper;
 import com.gusl.gojserver.problem.infrastructure.persistence.TagMapper;
 import com.gusl.gojserver.account.infrastructure.persistence.UserMapper;
-import com.gusl.gojserver.problem.application.dto.ProblemDraftDto;
+import com.gusl.gojserver.problem.application.dto.ProblemSaveDto;
 import com.gusl.gojserver.problem.application.dto.ProblemPageListDto;
 import com.gusl.common.pojo.entity.Problem;
-import com.gusl.gojserver.problem.application.dto.UpdateProblemDraftDto;
 import com.gusl.gojserver.account.infrastructure.security.LoginUser;
 import com.gusl.gojserver.account.domain.model.User;
 import com.gusl.gojserver.problem.application.vo.AdminProblemPageListVo;
-import com.gusl.gojserver.problem.application.vo.ProblemDraftListVo;
 import com.gusl.gojserver.problem.application.vo.ProblemInfoVo;
 import com.gusl.gojserver.problem.application.vo.ProblemPageListVo;
 import com.gusl.gojserver.problem.application.vo.ProblemTagRow;
 import com.gusl.gojserver.problem.application.vo.ProblemTagsVo;
 import com.gusl.gojserver.problem.application.vo.ProblemTestDataListVo;
 import com.gusl.gojserver.problem.application.vo.TotalProblemInfoVo;
-import com.gusl.gojserver.problem.application.vo.UploadProblemDetailVo;
 import com.gusl.gojserver.shared.application.pagination.PageFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -60,8 +51,6 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
     private final TagMapper tagMapper;
 
     private final ProblemTestDataService problemTestDataService;
-
-    private final SysProperties sysProperties;
 
     private final PageFactory pageFactory;
     private final UserMapper userMapper;
@@ -107,245 +96,67 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         if (problem == null) {
             throw new BaseException("题目不存在或尚未发布");
         }
-        // 进行属性卡拷贝
+        // 复制公开题目信息
         BeanUtil.copyProperties(problem, info);
         info.setAuthorName(userMapper.selectById(problem.getAuthorId()).getUsername());
         info.setTags(tagMapper.getTagByProblemId(id));
         return info;
     }
 
-    /**
-     * 用户上传题目, 上传数据未成功, 题目默认会保存为草稿状态
-     */
+    /** 管理员创建题目，不要求同时上传测试数据。 */
     @Override
-    public Long uploadProblemByUser(
-            ProblemDraftDto draft,
-            MultipartFile data,
-            LoginUser loginUser
-    ) throws IOException {
-        if (StringUtils.isEmpty(
-                draft.getProblemName(),
-                draft.getDescription(),
-                draft.getInputDescription(),
-                draft.getOutPutDescription(),
-                draft.getInputExample(),
-                draft.getOutPutExample())
-                ||
-                data.isEmpty()
-        ) {
-            throw new BaseException("题目基本信息不能为空");
-        }
-
-        // 插入问题草稿
-        if (draft.getTimeLimit() == null || draft.getTimeLimit() <= 0
-                || draft.getMemoryLimit() == null || draft.getMemoryLimit() <= 0) {
-            throw new BaseException("时间限制和内存限制必须大于 0");
-        }
-
-        Problem problem = BeanUtil.copyProperties(draft, Problem.class);
+    public Long createProblem(ProblemSaveDto dto, LoginUser loginUser) {
+        validateProblem(dto);
+        Problem problem = BeanUtil.copyProperties(dto, Problem.class);
         problem.setAuthorId(loginUser.getUserId());
         problem.setStatus(ProblemStatus.DRAFT);
         problemMapper.insert(problem);
-
-        problemTestDataService.uploadTestData(problem.getId(), data, loginUser);
-
-        // 使用状态条件保证上传完成后只能从草稿进入待审核状态。
-        int affectedRows = problemMapper.update(
-                Wrappers.<Problem>lambdaUpdate()
-                        .set(Problem::getStatus, ProblemStatus.PENDING)
-                        .eq(Problem::getId, problem.getId())
-                        .eq(Problem::getStatus, ProblemStatus.DRAFT)
-        );
-        if (affectedRows != 1) {
-            throw new BaseException("题目状态更新失败");
-        }
         return problem.getId();
     }
 
-    /**
-     * 获取已上传题目列表
-     */
+    /** 管理员编辑题目信息，不改变题目状态和测试数据。 */
     @Override
-    public PageResult<ProblemDraftListVo> getUploadProblemList(PageQuery pageQuery, LoginUser loginUser) {
-
-        // 根据 id 进行排序
-        Page<Problem> page = pageFactory.create(pageQuery, OrderItem.asc("id"));
-
-        // 获取所有作者是我的题目
-        Page<Problem> list = problemMapper.selectPage(
-                page,
-                Wrappers.<Problem>lambdaQuery()
-                        .eq(Problem::getAuthorId, loginUser.getUserId())
-        );
-
-        if (list.getRecords() == null || list.getRecords().isEmpty()) {
-            return PageResult.empty();
-        }
-
-        IPage<ProblemDraftListVo> res = list.convert(p ->
-                BeanUtil.toBean(p, ProblemDraftListVo.class)
-        );
-
-        return PageResult.of(res);
-    }
-
-    /**
-     * 更新题目信息
-     */
-    @Override
-    public void updateMyProblemDraft(UpdateProblemDraftDto problemDraftDto, LoginUser loginUser) {
-        // 封装修改后的题目信息，修改成功后进入草稿状态
-        Problem problem = BeanUtil.copyProperties(problemDraftDto, Problem.class);
-        problem.setStatus(ProblemStatus.DRAFT);
-
-        // 在同一条 SQL 中校验作者和原状态，避免查询后题目状态发生变化
-        int affectedRows = problemMapper.update(
-                problem,
-                Wrappers.<Problem>lambdaUpdate()
-                        .eq(Problem::getId, problemDraftDto.getProblemId())
-                        .eq(Problem::getAuthorId, loginUser.getUserId())
-                        .in(Problem::getStatus, ProblemStatus.WITHDRAW, ProblemStatus.DRAFT)
-        );
-        if (affectedRows != 1) {
-            throw new BaseException("题目不存在、状态已变化或无权修改");
+    public void updateProblem(Long problemId, ProblemSaveDto dto) {
+        validateProblem(dto);
+        Problem problem = BeanUtil.copyProperties(dto, Problem.class);
+        problem.setId(problemId);
+        if (problemMapper.updateById(problem) != 1) {
+            throw new BaseException("题目不存在");
         }
     }
 
-    /**
-     * 重新提交审核
-     */
+    /** 管理员直接设置状态；公开题目前检查当前启用数据。 */
     @Override
-    public void reUploadProblem(Long problemId, LoginUser loginUser) {
-        int update = problemMapper.update(
-                Wrappers.<Problem>lambdaUpdate()
-                        .set(Problem::getStatus, ProblemStatus.PENDING)
-                        .eq(Problem::getId, problemId)
-                        .eq(Problem::getAuthorId, loginUser.getUserId())
-                        // 题目从撤回状态, 你需要修改后就会变成草稿状态, 不然就重复提交了.
-                        .eq(Problem::getStatus, ProblemStatus.DRAFT)
-        );
-        if (update == 0) {
-            throw new BaseException("无需要提交审核的问题");
-        }
-    }
-
-    /**
-     * 删除我的草稿问题
-     */
-    @Override
-    public void deleteMyProblemDraft(Long problemId, LoginUser loginUser) {
-        int deleteRows = problemMapper.delete(
-                Wrappers.<Problem>lambdaQuery()
-                        .eq(Problem::getAuthorId, loginUser.getUserId())
-                        .eq(Problem::getId, problemId)
-                        .in(Problem::getStatus, ProblemStatus.WITHDRAW, ProblemStatus.DRAFT)
-        );
-        // 如果都没这问题, 都不需要删除对应测试数据了
-        if (deleteRows == 0) {
-            return;
-        }
-        // 还需要获取删除对应测试数据
-        List<ProblemTestData> testDataList = problemTestDataService.list(
-                Wrappers.<ProblemTestData>lambdaQuery()
-                        .eq(ProblemTestData::getProblemId, problemId)
-        );
-        problemTestDataService.removeBatchByIds(testDataList);
-        testDataList.forEach(testData -> {
-            Path path = Path.of(sysProperties.getDataRoot(), testData.getStoragePath());
-            FileUtil.del(path.getParent());
-        });
-    }
-
-    /**
-     * 管理员设置问题状态
-     */
-    @Override
+    @Transactional(rollbackFor = Exception.class)
     public void setProblemStatus(Long problemId, Integer status) {
-        List<Integer> sourceStatuses;
-        if (ProblemStatus.DISABLE.equals(status)) {
-            sourceStatuses = List.of(ProblemStatus.PREPARE, ProblemStatus.PUBLISH);
-        } else if (ProblemStatus.PREPARE.equals(status)) {
-            sourceStatuses = List.of(ProblemStatus.DISABLE);
-        } else {
-            throw new BaseException("管理员只能将题目停用或恢复到准备状态");
+        if (!ProblemStatus.DRAFT.equals(status)
+                && !ProblemStatus.PUBLISH.equals(status)
+                && !ProblemStatus.DISABLE.equals(status)) {
+            throw new BaseException("题目状态不合法");
         }
-
-        int update = problemMapper.update(
-                Wrappers.<Problem>lambdaUpdate()
-                        .set(Problem::getStatus, status)
-                        .eq(Problem::getId, problemId)
-                        .in(Problem::getStatus, sourceStatuses)
-        );
-        if (update != 1){
-            throw new BaseException("题目不存在或当前状态不允许修改");
-        }
-    }
-
-    /**
-     * 获取我上传的题目详情.
-     */
-    @Override
-    public UploadProblemDetailVo getUploadProblemDetail(Long problemId, LoginUser loginUser) {
-
+        // 与测试数据写操作使用同一个题目行锁，保证发布检查和状态写入一致。
         Problem problem = problemMapper.selectOne(
-                Wrappers.<Problem> lambdaQuery()
-                        .eq(Problem::getId, problemId)
-                        .eq(Problem::getAuthorId, loginUser.getUserId())
+                Wrappers.<Problem>lambdaQuery().eq(Problem::getId, problemId).last("FOR UPDATE")
         );
-
-        if (problem == null){
-            throw new BaseException("该问题不存在");
+        if (problem == null) {
+            throw new BaseException("题目不存在");
         }
-
-        List<ProblemTagsVo> tags = tagMapper.getTagsByProblemId(problemId);
-
-        List<ProblemTestData> dataList = problemTestDataMapper.selectList(
-                Wrappers.<ProblemTestData>lambdaQuery()
-                        .eq(ProblemTestData::getProblemId, problem.getId())
-        );
-
-        List<ProblemTestDataListVo> dataListVos = new ArrayList<>(dataList.size());
-        dataList.forEach(data -> {
-            dataListVos.add(BeanUtil.copyProperties(data, ProblemTestDataListVo.class));
-        });
-
-        UploadProblemDetailVo vo = BeanUtil.copyProperties(problem, UploadProblemDetailVo.class);
-
-        // 标签集合
-        vo.setTags(tags);
-
-        // 测试数据集合
-        vo.setTestDataInfoList(dataListVos);
-
-        return vo;
+        if (ProblemStatus.PUBLISH.equals(status)) {
+            problemTestDataService.requireActiveTestData(problemId);
+        }
+        problemMapper.update(Wrappers.<Problem>lambdaUpdate()
+                .set(Problem::getStatus, status).eq(Problem::getId, problemId));
     }
 
-    /**
-     * 更新我的问题状态
-     * @param problemId 问题id
-     * @param status 数据库题目状态：1 已发布，5 准备中
-     */
-    @Override
-    public void updateMyProblemStatus(Long problemId, Integer status, LoginUser loginUser) {
-
-        Integer sourceStatus;
-        if (ProblemStatus.PUBLISH.equals(status)) {
-            sourceStatus = ProblemStatus.PREPARE;
-        } else if (ProblemStatus.PREPARE.equals(status)) {
-            sourceStatus = ProblemStatus.PUBLISH;
-        } else {
-            throw new BaseException("作者只能将题目修改为已发布或准备状态");
+    /** 创建和编辑使用相同的题面与资源限制校验。 */
+    private void validateProblem(ProblemSaveDto dto) {
+        if (dto == null || StringUtils.isEmpty(dto.getProblemName(), dto.getDescription(),
+                dto.getInputDescription(), dto.getOutPutDescription())) {
+            throw new BaseException("题目基本信息不能为空");
         }
-
-        int update = problemMapper.update(
-                Wrappers.<Problem>lambdaUpdate()
-                        .set(Problem::getStatus, status)
-                        .eq(Problem::getStatus, sourceStatus)
-                        .eq(Problem::getAuthorId, loginUser.getUserId())
-                        .eq(Problem::getId, problemId)
-        );
-        if (update != 1){
-            throw new BaseException("题目不存在、无权修改或当前状态不允许切换");
+        if (dto.getTimeLimit() == null || dto.getTimeLimit() <= 0
+                || dto.getMemoryLimit() == null || dto.getMemoryLimit() <= 0) {
+            throw new BaseException("时间限制和内存限制必须大于 0");
         }
     }
 

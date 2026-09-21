@@ -32,11 +32,13 @@ public class ProblemTestData extends BaseEntity {
 
     private String archiveName;
 
+    /** 原始 ZIP 相对于数据根目录的路径。 */
+    private String archivePath;
+
+    /** 解压后的测试点目录，相对于数据根目录。 */
     private String storagePath;
 
     private String archiveSha256;
-
-    private String status;
 
     private Boolean active;
 }
