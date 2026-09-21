@@ -55,7 +55,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/goj?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: root
-    password: 200610
+    password: ${GOJ_MYSQL_PASSWORD}
 
   data:
     redis:
