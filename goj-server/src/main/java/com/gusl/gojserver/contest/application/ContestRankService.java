@@ -24,11 +24,16 @@ import com.gusl.gojserver.shared.application.pagination.PageFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -47,6 +52,8 @@ public class ContestRankService {
     private final PageFactory pageFactory;
 
     private final RedisTemplate<String, Object> redisTemplate;
+
+    private final ThreadPoolTaskExecutor contestRankExecutor;
 
 
     @Value("${goj.contest.rank-cache.running-ttl-seconds}")
@@ -87,11 +94,18 @@ public class ContestRankService {
 
         // 如果不在缓存
         if (snapshot == null){
-            snapshot = new ContestRankSnapshot(
-                    contestId,
-                    calContestRank(contestId, contest),
-                    LocalDateTime.now()
-            );
+            try {
+                snapshot = new ContestRankSnapshot(
+                        contestId,
+                        calContestRank(contestId, contest),
+                        LocalDateTime.now()
+                );
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException("排行榜计算被中断", e);
+            } catch (ExecutionException e) {
+                throw new RuntimeException("排行榜数据查询失败", e);
+            }
             // 保存榜单快照.
             saveContestSnapshot(contestId, snapshot, getContestTtl(contest.getStatus()));
         }
@@ -119,7 +133,7 @@ public class ContestRankService {
      * @param contest 比赛
      * @return 比赛榜单列表
      */
-    private List<ContestRankingRowVo> calContestRank(Long contestId, Contest contest){
+    private List<ContestRankingRowVo> calContestRank(Long contestId, Contest contest) throws ExecutionException, InterruptedException {
 
         // 获取全部参赛人员.
         List<ContestParticipate> participates = contestParticipateMapper.selectList(
@@ -132,111 +146,162 @@ public class ContestRankService {
             return Collections.emptyList();
         }
 
-        List<Long> userIds = new ArrayList<>();
-        for(ContestParticipate participate : participates){
-            userIds.add(participate.getUserId());
-        }
-        List<User> users = userMapper.selectList(
-                Wrappers.<User>lambdaQuery()
-                        .in(User::getId, userIds)
-                        .orderByAsc(User::getId)
+        // 获取实际用户
+        Future<List<User>> userFuture = contestRankExecutor.submit(() -> {
+            List<Long> userIds = participates.stream()
+                    .map(ContestParticipate::getUserId)
+                    .collect(Collectors.toList());
+            return userMapper.selectList(
+                    Wrappers.<User>lambdaQuery()
+                            .in(User::getId, userIds)
+                            .orderByAsc(User::getId)
+            );
+        });
+
+        // 获取比赛问题
+        Future<List<ContestProblem>> contestProblemSubmit = contestRankExecutor.submit(() ->
+                contestProblemMapper.selectList(
+                        Wrappers.<ContestProblem>lambdaQuery()
+                                .eq(ContestProblem::getContestId, contestId)
+                                .orderByAsc(ContestProblem::getProblemId)
+                )
         );
 
-        List<ContestProblem> contestProblems = contestProblemMapper.selectList(
-                Wrappers.<ContestProblem>lambdaQuery()
-                        .eq(ContestProblem::getContestId, contestId)
-                        .orderByAsc(ContestProblem::getProblemId)
+        // 获取比赛全部提交
+        Future<List<ContestSubmission>> submissionSubmit = contestRankExecutor.submit(() ->
+                contestSubmissionMapper.selectList(
+                        Wrappers.<ContestSubmission>lambdaQuery()
+                                .eq(ContestSubmission::getContestId, contestId)
+                                .ge(ContestSubmission::getSubmissionTime, contest.getStartTime())
+                                .lt(ContestSubmission::getSubmissionTime, contest.getEndTime())
+                                .orderByAsc(ContestSubmission::getUserId)
+                                .orderByAsc(ContestSubmission::getProblemId)
+                                .orderByAsc(ContestSubmission::getSubmissionTime)
+                                .orderByAsc(ContestSubmission::getId)
+                )
         );
 
-        // 优先根据 userId, problemId进行排序
-        List<ContestSubmission> submissions = contestSubmissionMapper.selectList(
-                Wrappers.<ContestSubmission>lambdaQuery()
-                        .eq(ContestSubmission::getContestId, contestId)
-                        .ge(ContestSubmission::getSubmissionTime, contest.getStartTime())
-                        .lt(ContestSubmission::getSubmissionTime, contest.getEndTime())
-                        .orderByAsc(ContestSubmission::getUserId)
-                        .orderByAsc(ContestSubmission::getProblemId)
-                        .orderByAsc(ContestSubmission::getSubmissionTime)
-                        .orderByAsc(ContestSubmission::getId)
-        );
+        List<User> users = userFuture.get();
 
-        List<ContestRankingRowVo> contestRankingRows = new ArrayList<>();
+        List<ContestProblem> contestProblems = contestProblemSubmit.get();
 
-        int cursor = 0;
+        List<ContestSubmission> submissions = submissionSubmit.get();
+
+
+        // 开始计算结果
+        List<CompletableFuture<ContestRankingRowVo>> futures = new ArrayList<>();
 
         // 对于每个用户来说
         for(User user : users){
-            ContestRankingRowVo rowVo = new ContestRankingRowVo();
 
-            rowVo.setUsername(user.getUsername());
-            rowVo.setUserId(user.getId());
+            CompletableFuture<ContestRankingRowVo> completableFuture = CompletableFuture.supplyAsync(
+                    () -> calculateUserRowVo(user, submissions, contestProblems, contest),
+                    contestRankExecutor
+            );
 
-            // 移动到指定用户的提交区间
-            while(cursor < submissions.size() && submissions.get(cursor).getUserId() < user.getId()){
-                cursor++;
-            }
-
-            List<ProblemResults> problemResultsList = new ArrayList<>();
-
-            int penalty = 0;
-            int solve = 0;
-
-            // 比赛问题已经根据问题id进行排序.
-            for(ContestProblem cs : contestProblems){
-
-                ProblemResults problemResults = ProblemResults.builder()
-                        .wrongAttempts(0)
-                        .accepted(false)
-                        .displayCode(cs.getDisplayCode())
-                        .acceptedMinute(-1) // 没通过, 默认时间使用 -1
-                        .sortOrder(cs.getSortOrder())
-                        .build();
-
-                // 移动到该问题区间.
-                while(
-                        cursor < submissions.size() &&
-                                Objects.equals(submissions.get(cursor).getProblemId(), cs.getProblemId()) &&
-                                Objects.equals(submissions.get(cursor).getUserId(), user.getId())
-                ){
-                    ContestSubmission submission = submissions.get(cursor++);
-
-                    if (problemResults.isAccepted()) {
-                        continue;
-                    }
-
-                    // 如果通过了就结束.
-                    if(JudgingConstant.ACCEPTED.equals(submission.getStatus())){
-                        int minute = (int)Duration.between(contest.getStartTime(), submission.getSubmissionTime()).toMinutes();
-                        problemResults.setAcceptedMinute(minute);
-                        problemResults.setAccepted(true);
-                        penalty += problemResults.getWrongAttempts() * 20 + minute;
-                        solve++;
-                    }
-
-                    // 判断是否为测评结束后的合法终态.
-                    if(isPenaltyStatus(submission.getStatus())){
-                        problemResults.setWrongAttempts(problemResults.getWrongAttempts() + 1);
-                    }
-
-                }
-
-                problemResultsList.add(problemResults);
-            }
-
-            // 再根据问题定义的顺序进行排序.
-            problemResultsList.sort((a, b) -> a.getSortOrder() - b.getSortOrder());
-
-            rowVo.setProblemResults(problemResultsList);
-            rowVo.setSolveCount(solve);
-            rowVo.setPenaltyMinutes(penalty);
-
-            contestRankingRows.add(rowVo);
+            futures.add(completableFuture);
         }
 
-        sortRowByRank(contestRankingRows);
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
-        return contestRankingRows;
+        List<ContestRankingRowVo> rows = new ArrayList<>();
+
+        futures.forEach(e -> rows.add(e.join()));
+
+        sortRowByRank(rows);
+
+        return rows;
     }
+
+    private ContestRankingRowVo calculateUserRowVo(
+            User user,
+            List<ContestSubmission> submissions,
+            List<ContestProblem> contestProblems,
+            Contest contest
+    ){
+        Long userId = user.getId();
+
+        ContestRankingRowVo rowVo = new ContestRankingRowVo();
+        rowVo.setUserId(userId);
+        rowVo.setUsername(user.getUsername());
+
+        // 通过二分定位到当前用户提交区间的起点.
+        int l = 0;
+        int r = submissions.size() - 1;
+        int m;
+        while(l <= r){
+            m = l + r >> 1;
+            if(submissions.get(m).getUserId() >= userId){
+                r = m - 1;
+            }else {
+                l = m + 1;
+            }
+        }
+
+        List<ProblemResults> problemResultsList = new ArrayList<>();
+
+        int p = l;
+        int solve = 0;
+        int penalty = 0;
+
+        // 比赛问题已经根据问题id进行排序.
+        for(ContestProblem cs : contestProblems){
+
+            ProblemResults problemResults = ProblemResults.builder()
+                    .wrongAttempts(0)
+                    .accepted(false)
+                    .displayCode(cs.getDisplayCode())
+                    .acceptedMinute(-1) // 没通过, 默认时间使用 -1
+                    .sortOrder(cs.getSortOrder())
+                    .build();
+
+            // 移动到指定区间
+            while(
+                    p < submissions.size() &&
+                    submissions.get(p).getUserId().equals(userId) &&
+                    submissions.get(p).getProblemId() < cs.getProblemId()
+            ){
+                p++;
+            }
+
+            // 处理每个问题
+            while(
+                    p < submissions.size() &&
+                    submissions.get(p).getUserId().equals(userId) &&
+                    submissions.get(p).getProblemId().equals(cs.getProblemId())
+            ){
+                ContestSubmission submission = submissions.get(p++);
+
+                if (problemResults.isAccepted()){
+                    continue;
+                }
+
+                if(JudgingConstant.ACCEPTED.equals(submission.getStatus())){
+                    int minute = (int)Duration.between(contest.getStartTime(), submission.getSubmissionTime()).toMinutes();
+                    problemResults.setAcceptedMinute(minute);
+                    problemResults.setAccepted(true);
+                    penalty += problemResults.getWrongAttempts() * 20 + minute;
+                    solve++;
+                }
+
+                if(isPenaltyStatus(submission.getStatus())){
+                    problemResults.setWrongAttempts(problemResults.getWrongAttempts() + 1);
+                }
+            }
+
+            problemResultsList.add(problemResults);
+        }
+
+        // 再根据问题定义的顺序进行排序.
+        problemResultsList.sort((a, b) -> a.getSortOrder() - b.getSortOrder());
+
+        rowVo.setProblemResults(problemResultsList);
+        rowVo.setSolveCount(solve);
+        rowVo.setPenaltyMinutes(penalty);
+
+        return rowVo;
+    }
+
 
 
     /**
