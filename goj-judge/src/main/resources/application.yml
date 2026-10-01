@@ -16,15 +16,27 @@ goj:
       retry-initial-delay-seconds: 10  # 重试间隔
       processing-timeout-minutes: 10  # 任务最长执行时间
 
-    # Judge 端只在这里配置实际可执行的语言工具链；server 端另外维护对外可提交语言目录。
+    # 每项配置自动创建一个通用适配器，无需新增语言专属 Java 类。
+    # 工具链必须已安装在沙箱中；server 端仍通过 submission.languages 控制可提交目录。
+    # 当前启动时加载；以后配置中心可调用注册表 reload，完整校验后替换快照。
     languages:
-      java11:
-        code: java11
-        javac: /usr/local/java/jdk11/bin/javac
-        java:  /usr/local/java/jdk11/bin/java
-        jar: /usr/local/java/jdk11/bin/jar
-        env: PATH=/usr/local/java/jdk11/bin:/usr/bin:/bin
-        active-cache-file-name: Main.jar
+      - code: java11
+        source-file-name: Main.java
+        need-compile: true
+        active-file-name: Main.jar
+        env:
+          - PATH=/usr/local/java/jdk11/bin:/usr/bin:/bin
+        # 保留原有的沙箱内编译、打包流程；命令来自管理员配置，不拼接用户源码。
+        compile-args:
+          - /bin/bash
+          - -c
+          - /usr/local/java/jdk11/bin/javac -encoding UTF-8 Main.java && /usr/local/java/jdk11/bin/jar -cf Main.jar *.class
+        run-args:
+          - /usr/local/java/jdk11/bin/java
+          - -Dfile.encoding=UTF-8
+          - -cp
+          - /w/Main.jar
+          - Main
         compile:
           cpu-limit-ms: 10000
           real-cpu-limit-ms: 30000
@@ -40,19 +52,14 @@ goj:
           stdout-limit-bytes: 1048576
           stderr-limit-bytes: 16777216
 
-      py3:
-        code: py3
-        python: /usr/bin/python3
-        env: PYTHONIOENCODING=utf-8
-        active-file-name: Main.py
-        compile:
-          cpu-limit-ms: 10000
-          real-cpu-limit-ms: 30000
-          memory-limit-kb: 524288
-          stack-limit-kb: 131072
-          proc-limit: 64
-          stdout-limit-bytes: 16777216
-          stderr-limit-bytes: 16777216
+      - code: py3
+        source-file-name: Main.py
+        need-compile: false
+        env:
+          - PYTHONIOENCODING=utf-8
+        run-args:
+          - /usr/bin/python3
+          - /w/Main.py
         run:
           clock-limit-multiplier: 3
           stack-limit-kb: 131072

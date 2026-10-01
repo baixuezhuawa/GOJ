@@ -35,6 +35,7 @@ public class Compiler {
             compileResult.setStatus(SandBoxStatus.ACCEPTED);
             compileResult.setCompileMsg("无需编译");
             compileResult.setActiveFile(JSONObject.of("content", sourceCode));
+            return compileResult;
         }
 
         JSONObject compileRequest = adapter.createCompileRequest(sourceCode);

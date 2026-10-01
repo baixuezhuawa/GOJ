@@ -2,6 +2,9 @@ package com.gusl.gojjudge.judging.infrastructure.language.properties;
 
 import lombok.Data;
 
+/**
+ * 运行阶段限制，补充题目时间和内存限制以外的沙箱参数。
+ */
 @Data
 public class RunLimitInfo {
 

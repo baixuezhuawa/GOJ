@@ -1,7 +1,6 @@
 package com.gusl.gojjudge.judging.infrastructure.language.properties;
 
 import lombok.Data;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * 单种语言编译阶段的资源和输出限制。

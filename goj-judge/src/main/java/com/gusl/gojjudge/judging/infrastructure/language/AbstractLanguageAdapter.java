@@ -8,7 +8,7 @@ import java.util.List;
 /**
  * go-judge 语言适配器的公共基类。
  *
- * <p>子类只实现语言特有的命令参数和文件布局，本类统一组装 go-judge 的
+ * <p>本类定义判题流程依赖的统一契约；实现类负责组装 go-judge 的
  * {@code cmd} 请求、设置资源限制、挂载输入输出文件以及转换资源单位。
  * 适配器不负责发起 HTTP 请求、不更新提交状态，也不执行用户代码。</p>
  */
@@ -22,7 +22,7 @@ public abstract class AbstractLanguageAdapter {
     public abstract String languageCode();
 
     /**
-     * 沙箱编译后可执行文件名
+     * 运行时挂载的文件名，可以是编译产物或脚本源码
      */
     public abstract String activeFileName();
 
