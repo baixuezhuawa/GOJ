@@ -7,6 +7,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.mockito.ArgumentCaptor;
 import com.gusl.common.constant.ProblemStatus;
+import com.gusl.common.constant.ProblemType;
+import com.gusl.gojjudge.judging.application.engine.JudgeRequestConfigurer;
+import com.gusl.gojjudge.judging.infrastructure.persistence.ProblemCheckerMapper;
 import com.gusl.common.pojo.entity.JudgeTaskMessage;
 import com.gusl.common.pojo.entity.Problem;
 import com.gusl.common.pojo.entity.ProblemReviewSubmission;
@@ -37,6 +40,7 @@ class ProblemReviewJudgeHandlerTests {
         Problem problem = new Problem();
         problem.setId(2L);
         problem.setStatus(ProblemStatus.DRAFT);
+        problem.setProblemType(ProblemType.NORMAL);
         problem.setTimeLimit(1000);
         problem.setMemoryLimit(65536);
         ProblemTestData data = ProblemTestData.builder().id(3L).problemId(2L).version(8).active(false)
@@ -45,7 +49,7 @@ class ProblemReviewJudgeHandlerTests {
         when(problems.selectById(2L)).thenReturn(problem);
         when(datasets.selectOne(any())).thenReturn(data);
         ProblemReviewJudgeHandler handler = new ProblemReviewJudgeHandler(submissions, problems, datasets,
-                mock(SubmissionResultService.class));
+                mock(SubmissionResultService.class), new JudgeRequestConfigurer(mock(ProblemCheckerMapper.class)));
         JudgeTaskMessage message = new JudgeTaskMessage();
         message.setBusinessId(1L);
 

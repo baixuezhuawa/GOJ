@@ -153,6 +153,8 @@ mysql -u root -p goj < sql/data.sql
 
 首次登录后请立即修改默认密码。
 
+`sql` 目录仅保留完整表结构 `schema.sql` 和基础数据 `data.sql`。基础数据包括题目 1-8、第 8 题校验程序及测试数据元信息；第 7 题保留草稿状态，用户统计由实际判题结果生成。
+
 ### 3. 修改本地配置
 
 根据实际环境修改以下文件：
@@ -182,19 +184,23 @@ export GOJ_JWT_SECRET="请替换为足够长的随机字符串"
 
 ```text
 <goj.judge.data-root>
-└─ p1
-   ├─ test1
-   │  ├─ input.txt
-   │  └─ output.txt
-   ├─ test2
-   │  ├─ input.txt
-   │  └─ output.txt
-   └─ test3
-      ├─ input.txt
-      └─ output.txt
+└─ testData
+   └─ p1
+      └─ v1
+         ├─ test1
+         │  ├─ input.txt
+         │  └─ output.txt
+         ├─ test2
+         │  ├─ input.txt
+         │  └─ output.txt
+         └─ test3
+            ├─ input.txt
+            └─ output.txt
 ```
 
-其中 `p1` 对应题目 ID 1，`test1` 对应第 1 个测试点。必须完整提供从 `test1` 到 `test{test_node_count}` 的输入和输出文件，否则该提交会结束为 `system error`。
+其中 `p1` 对应题目 ID 1，`v1` 对应数据版本 1，`test1` 对应第 1 个测试点。初始化数据使用相对路径 `testData/p1/v1`；题目 1-6 各有 3 个测试点，题目 7 有 12 个，题目 8 有 4 个。必须完整提供从 `test1` 到 `test{test_node_count}` 的输入和输出文件，否则该提交会结束为 `system error`。
+
+第 8 题的数据生成脚本位于 [`docs/examples/special-checker/generate-test-data.ps1`](docs/examples/special-checker/generate-test-data.ps1)，使用说明见 [`docs/special-judge.md`](docs/special-judge.md)。
 
 ### 5. 启动 go-judge
 

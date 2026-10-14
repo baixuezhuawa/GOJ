@@ -4,6 +4,7 @@ import com.gusl.gojjudge.judging.application.strategy.JudgeStrategy;
 
 
 import com.gusl.common.constant.JudgingConstant;
+import com.gusl.common.constant.CheckType;
 import com.gusl.common.constant.SandBoxStatus;
 import com.gusl.common.constant.SystemConstant;
 import com.gusl.gojjudge.judging.infrastructure.language.AbstractLanguageAdapter;
@@ -48,6 +49,7 @@ public class JudgeEngine {
                 .orElseThrow(() -> new JudgeSystemException("不支持的判题执行方式"));
 
         CompileResult compileResult = null;
+        CompileResult checkerCompileResult = null;
 
         try {
 
@@ -67,6 +69,18 @@ public class JudgeEngine {
                 return ;
             }
 
+            // 特殊题复用编译模块准备校验程序，全部测试点共用编译产物。
+            AbstractLanguageAdapter checkerAdapter = null;
+            if (CheckType.SPECIAL.equals(request.getCheckerConfig().getCheckType())) {
+                checkerAdapter = languageAdapterRegistry.require(request.getCheckerConfig().getLanguage());
+
+                checkerCompileResult = compiler.compile(request.getCheckerConfig().getSourceCode(), checkerAdapter);
+
+                if (!SandBoxStatus.ACCEPTED.equals(checkerCompileResult.getStatus())) {
+                    throw new JudgeSystemException("校验程序编译失败: " + checkerCompileResult.getCompileMsg());
+                }
+            }
+
             // 进入运行阶段，同时保存编译信息
             cur.status(JudgingConstant.RUNNING).push();
 
@@ -75,9 +89,11 @@ public class JudgeEngine {
                     .request(request)
                     .adapter(adapter)
                     .compileResult(compileResult)
+                    .checkerAdapter(checkerAdapter)
+                    .checkerCompileResult(checkerCompileResult)
                     .build();
 
-            // 不同类型的题会有不同的判题策略, 运行交给不是的策略的实现类完成.
+            // 执行方式决定策略；普通题与答案不唯一题共用批量测试点策略。
             JudgeResult result = strategy.judge(context);
 
             // 策略必须给终态, 不能作为普通结果落库
@@ -90,7 +106,7 @@ public class JudgeEngine {
                 throw new JudgeSystemException(result.getJudgeMsg());
             }
 
-            // 甚至终态结果.
+            // 设置终态结果。
             cur.status(result.getStatus())
                     .usage(result.getTimeMs(), result.getMemoryKb())
                     .judgeMessage(result.getJudgeMsg())
@@ -98,6 +114,14 @@ public class JudgeEngine {
                     .push();
 
         }finally {
+            // 校验程序和选手程序分别清理，避免一个清理失败阻止另一个。
+            if (checkerCompileResult != null) {
+                try {
+                    compiler.deleteCacheCompileFile(checkerCompileResult);
+                } catch (Exception e) {
+                    log.warn("本次清理校验程序编译产物失败", e);
+                }
+            }
             if(compileResult != null){
                 try {
                     compiler.deleteCacheCompileFile(compileResult);

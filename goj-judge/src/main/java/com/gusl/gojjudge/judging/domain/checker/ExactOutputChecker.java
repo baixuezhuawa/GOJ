@@ -4,6 +4,7 @@ import com.gusl.common.constant.CheckType;
 import com.gusl.common.utils.StringUtils;
 import com.gusl.gojjudge.judging.domain.exception.JudgeSystemException;
 import com.gusl.gojjudge.judging.domain.model.CheckResult;
+import com.gusl.gojjudge.judging.domain.model.OutputCheckContext;
 import org.springframework.stereotype.Component;
 
 /**
@@ -18,12 +19,12 @@ public class ExactOutputChecker implements OutputChecker {
     }
 
     @Override
-    public CheckResult check(String input, String exceptedOutput, String actualOutput) {
-        if(StringUtils.isEmpty(exceptedOutput)){
+    public CheckResult check(OutputCheckContext context) {
+        if(StringUtils.isEmpty(context.getExpectedOutput())){
             throw new JudgeSystemException("标准输出内容为空");
         }
-        String normalizedExcepted = normalize(exceptedOutput);
-        String normalizedActual = normalize(actualOutput);
+        String normalizedExcepted = normalize(context.getExpectedOutput());
+        String normalizedActual = normalize(context.getActualOutput());
 
         if(normalizedExcepted.equals(normalizedActual)){
             return CheckResult.accepted();

@@ -15,7 +15,7 @@ import com.gusl.gojjudge.judging.infrastructure.persistence.ContestProblemMapper
 import com.gusl.gojjudge.judging.infrastructure.persistence.ContestSubmissionMapper;
 import com.gusl.gojjudge.judging.infrastructure.persistence.ProblemMapper;
 import com.gusl.gojjudge.judging.infrastructure.persistence.ProblemTestDataMapper;
-import com.gusl.gojjudge.judging.domain.model.CheckerConfig;
+import com.gusl.gojjudge.judging.application.engine.JudgeRequestConfigurer;
 import com.gusl.gojjudge.judging.application.engine.JudgeExecutionRequest;
 import com.gusl.gojjudge.judging.domain.model.TestDataRef;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +33,7 @@ public class ContestSubmissionJudgeHandler implements SubmissionJudgeHandler {
     private final ProblemMapper problemMapper;
     private final ProblemTestDataMapper problemTestDataMapper;
     private final SubmissionResultService submissionResultService;
+    private final JudgeRequestConfigurer judgeRequestConfigurer;
 
 
     @Override
@@ -64,20 +65,17 @@ public class ContestSubmissionJudgeHandler implements SubmissionJudgeHandler {
             throw new JudgeSystemException("无法加载比赛题目或测试数据");
         }
 
-        CheckerConfig checkerConfig = new CheckerConfig();
-        checkerConfig.setCheckType(CheckType.TEXT);
         JudgeExecutionRequest request = JudgeExecutionRequest.builder()
                 .language(submission.getLanguage())
                 .sourceCode(submission.getSourceCode())
                 .timeLimitMs(problem.getTimeLimit().longValue())
                 .memoryLimitKb(problem.getMemoryLimit().longValue())
-                .executionMode(ExecutionMode.BATCH_TEST_NODE)
-                .checkerConfig(checkerConfig)
                 .testDataRef(TestDataRef.builder()
                         .problemId(problem.getId()).testDataId(testData.getId())
                         .storagePath(testData.getStoragePath()).storageType(StorageType.LOCAL_FILE)
                         .testCaseCount(testData.getTestNodeCount()).version(testData.getVersion()).build())
                 .build();
+        judgeRequestConfigurer.configure(problem, request);
         return new LoadedSubmissionJudgeContext(request,
                 (task, outcome) -> submissionResultService.updateSubmission(submission, outcome), false);
     }

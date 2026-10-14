@@ -1,3 +1,5 @@
+-- 完整表结构：用于全新开发环境初始化，包含删表操作，不用于已有数据库升级。
+-- 执行顺序：schema.sql → data.sql。历史迁移已合并到当前表定义。
 CREATE DATABASE IF NOT EXISTS `goj`
     DEFAULT CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
@@ -108,6 +110,7 @@ CREATE TABLE `problem`
 (
     `id`                 BIGINT           NOT NULL AUTO_INCREMENT COMMENT '题目 id',
     `problem_name`       VARCHAR(128)     NOT NULL COMMENT '题目名称',
+    `problem_type`       TINYINT UNSIGNED NOT NULL DEFAULT 0 COMMENT '题目类型：0 普通，1 答案不唯一，2 交互',
     `time_limit`         INT UNSIGNED     NOT NULL DEFAULT 1000 COMMENT '时间限制，单位毫秒',
     `memory_limit`       INT UNSIGNED     NOT NULL DEFAULT 262144 COMMENT '空间限制，单位 KB',
     `description`        TEXT             NOT NULL COMMENT '题面描述',
@@ -136,6 +139,25 @@ CREATE TABLE `problem`
     COMMENT = '题目表';
 
 
+
+DROP TABLE IF EXISTS `problem_checker`;
+CREATE TABLE `problem_checker`
+(
+    `id`          BIGINT      NOT NULL AUTO_INCREMENT COMMENT '校验程序 id',
+    `problem_id`  BIGINT      NOT NULL COMMENT '所属题目 id',
+    `language`    VARCHAR(32) NOT NULL COMMENT '校验程序语言编码',
+    `source_code` LONGTEXT    NOT NULL COMMENT '校验程序源码',
+    `create_by`   VARCHAR(64)          DEFAULT NULL COMMENT '创建人',
+    `create_time` DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_by`   VARCHAR(64)          DEFAULT NULL COMMENT '更新人',
+    `update_time` DATETIME             DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `remark`      VARCHAR(500)         DEFAULT NULL COMMENT '备注',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_problem_checker_problem_id` (`problem_id`)
+) ENGINE = InnoDB
+  DEFAULT CHARACTER SET = utf8mb4
+  COLLATE = utf8mb4_unicode_ci
+    COMMENT = '题目当前校验程序表';
 
 DROP TABLE IF EXISTS `problem_test_data`;
 CREATE TABLE `problem_test_data`

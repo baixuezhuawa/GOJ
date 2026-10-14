@@ -6,6 +6,7 @@ import com.gusl.common.constant.SandBoxStatus;
 import com.gusl.gojjudge.judging.infrastructure.language.AbstractLanguageAdapter;
 import com.gusl.gojjudge.judging.domain.exception.SystemErrorException;
 import com.gusl.gojjudge.judging.domain.model.CheckResult;
+import com.gusl.gojjudge.judging.domain.model.OutputCheckContext;
 import com.gusl.gojjudge.judging.application.engine.JudgeContext;
 import com.gusl.gojjudge.judging.application.engine.JudgeExecutionRequest;
 import com.gusl.gojjudge.judging.domain.model.JudgeResult;
@@ -23,7 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
- * 普通测评策略, 样例点
+ * 批量测试点策略，运行选手程序并调用题目配置的输出校验器。
  */
 @Slf4j
 @Component
@@ -42,7 +43,7 @@ public class NormalJudgeStrategy implements JudgeStrategy {
      */
     @Override
     public ExecutionMode executionMode() {
-        return ExecutionMode.BATCH_TEST_NODE;
+        return ExecutionMode.SPECIAL;
     }
 
     /**
@@ -96,11 +97,16 @@ public class NormalJudgeStrategy implements JudgeStrategy {
                 // 获取运行结果
                 RunResult runResult = runner.run(adapter, runContext);
 
-                maxTime = Math.max(maxTime, (int)(runResult.getRunTimeNan() + 999_999) / 1_000_000);
-                maxMemory = Math.max(maxMemory, (int)(runResult.getMemoryByte() + 1023) / 1024);
-
                 String status = runResult.getStatus();
                 Integer exitStatus = runResult.getExitStatus();
+
+                // 沙箱故障属于系统异常，先于资源统计处理，避免缺少统计字段掩盖原始故障。
+                if (SandBoxStatus.INTERNAL_ERROR.equals(status) || SandBoxStatus.FILE_ERROR.equals(status)) {
+                    throw new SystemErrorException("沙箱运行发生系统异常: " + status);
+                }
+
+                maxTime = Math.max(maxTime, (int)((runResult.getRunTimeNan() + 999_999L) / 1_000_000));
+                maxMemory = Math.max(maxMemory, (int)((runResult.getMemoryByte() + 1023L) / 1024));
 
                 // 运行时异常
                 if (SandBoxStatus.SIGNALLED.equals(status) || SandBoxStatus.NONZERO_EXIT_STATUS.equals(status)) {
@@ -126,9 +132,15 @@ public class NormalJudgeStrategy implements JudgeStrategy {
                 else {
                     // 答案检测
                     CheckResult check = outputChecker.check(
-                            testCase.getInput(),
-                            testCase.getExpectedOutput(),
-                            runResult.getStdout()
+                            OutputCheckContext.builder()
+                                .input(testCase.getInput())
+                                .expectedOutput(testCase.getExpectedOutput())
+                                .actualOutput(runResult.getStdout())
+                                .checkerAdapter(context.getCheckerAdapter())
+                                .checkerCompileResult(context.getCheckerCompileResult())
+                                .timeLimitMs(request.getTimeLimitMs())
+                                .memoryLimitKb(request.getMemoryLimitKb())
+                                .build()
                     );
 
                     if(check.isMatch()){
@@ -136,6 +148,7 @@ public class NormalJudgeStrategy implements JudgeStrategy {
                         judgeResult.setStatus(JudgingConstant.ACCEPTED);
                     } else {
                         judgeResult.setStatus(JudgingConstant.WRONG_ANSWER);
+                        judgeResult.setJudgeMsg(check.getMsg());
                     }
 
                 }

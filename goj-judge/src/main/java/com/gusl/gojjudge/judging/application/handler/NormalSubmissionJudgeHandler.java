@@ -9,7 +9,7 @@ import com.gusl.gojjudge.judging.domain.exception.JudgeSystemException;
 import com.gusl.gojjudge.judging.infrastructure.persistence.ProblemMapper;
 import com.gusl.gojjudge.judging.infrastructure.persistence.ProblemTestDataMapper;
 import com.gusl.gojjudge.judging.infrastructure.persistence.SubmissionMapper;
-import com.gusl.gojjudge.judging.domain.model.CheckerConfig;
+import com.gusl.gojjudge.judging.application.engine.JudgeRequestConfigurer;
 import com.gusl.gojjudge.judging.application.engine.JudgeExecutionRequest;
 import com.gusl.gojjudge.judging.domain.model.TestDataRef;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +30,8 @@ public class NormalSubmissionJudgeHandler implements SubmissionJudgeHandler {
     private final ProblemTestDataMapper problemTestDataMapper;
 
     private final SubmissionResultService submissionResultService;
+
+    private final JudgeRequestConfigurer judgeRequestConfigurer;
 
     @Value("${goj.judge.data-root}")
     private String dataRoot;
@@ -61,11 +63,7 @@ public class NormalSubmissionJudgeHandler implements SubmissionJudgeHandler {
         request.setTimeLimitMs(problem.getTimeLimit().longValue());
         request.setMemoryLimitKb(problem.getMemoryLimit().longValue());
 
-        CheckerConfig checkerConfig = new CheckerConfig();
-        checkerConfig.setCheckType(CheckType.TEXT);
-        request.setCheckerConfig(checkerConfig);
-
-        request.setExecutionMode(ExecutionMode.BATCH_TEST_NODE);
+        judgeRequestConfigurer.configure(problem, request);
 
         ProblemTestData testData = problemTestDataMapper.selectOne(
                 Wrappers.<ProblemTestData>lambdaQuery()

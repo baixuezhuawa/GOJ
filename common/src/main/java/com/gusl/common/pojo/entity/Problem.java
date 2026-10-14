@@ -31,6 +31,10 @@ public class Problem extends BaseEntity {
     @Schema(description = "题目名称")
     private String problemName;
 
+    /** 题目类型：0 普通，1 答案不唯一，2 交互。 */
+    @Schema(description = "题目类型：0 普通，1 答案不唯一，2 交互")
+    private Integer problemType;
+
     /** 时间限制，单位为毫秒。 */
     @Schema(description = "时间限制/ms")
     private Integer timeLimit;

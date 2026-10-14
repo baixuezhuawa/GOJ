@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.gusl.common.common.BaseException;
 import com.gusl.common.constant.ProblemStatus;
+import com.gusl.common.constant.ProblemType;
 import com.gusl.common.pojo.entity.Problem;
 import com.gusl.common.pojo.entity.ProblemTestData;
 import com.gusl.gojserver.account.infrastructure.persistence.UserMapper;
@@ -61,6 +62,7 @@ class ProblemManagementTests {
         ArgumentCaptor<Problem> capture = ArgumentCaptor.forClass(Problem.class);
         verify(problems).insert(capture.capture());
         assertEquals(ProblemStatus.DRAFT, capture.getValue().getStatus());
+        assertEquals(ProblemType.NORMAL, capture.getValue().getProblemType());
         verifyNoInteractions(data);
     }
 

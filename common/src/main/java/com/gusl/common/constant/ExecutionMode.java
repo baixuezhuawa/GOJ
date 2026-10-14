@@ -2,8 +2,11 @@ package com.gusl.common.constant;
 
 public enum ExecutionMode {
 
-    // 批量测试点
-    BATCH_TEST_NODE,
+    // 标准测评, 标注匹配答案
+    NORMAL,
+
+    // 特殊测评, 存在多种答案
+    SPECIAL,
 
     // 交互
     INTERACTION

@@ -9,6 +9,7 @@ import com.gusl.common.common.BaseException;
 import com.gusl.common.common.PageResult;
 import com.gusl.common.constant.ProblemProgressStatus;
 import com.gusl.common.constant.ProblemStatus;
+import com.gusl.common.constant.ProblemType;
 import com.gusl.common.pojo.entity.ProblemTestData;
 import com.gusl.common.utils.StringUtils;
 import com.gusl.gojserver.problem.infrastructure.persistence.ProblemMapper;
@@ -109,6 +110,9 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         validateProblem(dto);
         Problem problem = BeanUtil.copyProperties(dto, Problem.class);
         problem.setAuthorId(loginUser.getUserId());
+        if (problem.getProblemType() == null) {
+            problem.setProblemType(ProblemType.NORMAL);
+        }
         problem.setStatus(ProblemStatus.DRAFT);
         problemMapper.insert(problem);
         return problem.getId();
@@ -157,6 +161,12 @@ public class ProblemServiceImpl extends ServiceImpl<ProblemMapper, Problem> impl
         if (dto.getTimeLimit() == null || dto.getTimeLimit() <= 0
                 || dto.getMemoryLimit() == null || dto.getMemoryLimit() <= 0) {
             throw new BaseException("时间限制和内存限制必须大于 0");
+        }
+        if (dto.getProblemType() != null
+                && !ProblemType.NORMAL.equals(dto.getProblemType())
+                && !ProblemType.SPECIAL.equals(dto.getProblemType())
+                && !ProblemType.INTERACTION.equals(dto.getProblemType())) {
+            throw new BaseException("题目类型不合法");
         }
     }
 

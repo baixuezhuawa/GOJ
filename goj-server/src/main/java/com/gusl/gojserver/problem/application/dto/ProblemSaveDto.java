@@ -14,6 +14,10 @@ public class ProblemSaveDto {
     @Schema(description = "题目名称")
     private String problemName;
 
+    /** 题目类型，创建时省略则为普通题，编辑时省略则保持原值。 */
+    @Schema(description = "题目类型：0 普通，1 答案不唯一，2 交互")
+    private Integer problemType;
+
     /** 时间限制 /ms */
     @Schema(description = "时间限制/ms")
     private Integer timeLimit;
