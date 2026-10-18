@@ -112,8 +112,8 @@ spring:
 logging:
   level:
     com.gusl: debug
-    com.gusl.gojjudge.task.infrastructure.persistence: warn
-    com.gusl.gojjudge.judging.infrastructure.persistence: warn
+    com.gusl.gojjudge.task.mapper: warn
+    com.gusl.gojjudge.judging.mapper: warn
     org.springframework: warn
 
 # mybatis-plus配置
@@ -133,7 +133,7 @@ springdoc:
       paths-to-match:
         - /**
       packages-to-scan:
-        - com.gusl.gojjudge.judging.interfaces.web
+        - com.gusl.gojjudge.judging.web
 
 rocketmq:
   name-server: 192.168.100.128:9876

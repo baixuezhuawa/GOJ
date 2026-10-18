@@ -2,28 +2,26 @@ package com.gusl.gojjudge.judging;
 
 import com.alibaba.fastjson2.JSONObject;
 import com.gusl.common.constant.CheckType;
-import com.gusl.common.constant.ExecutionMode;
+import com.gusl.common.constant.ProblemType;
 import com.gusl.common.constant.JudgingConstant;
 import com.gusl.common.constant.SandBoxStatus;
 import com.gusl.common.pojo.entity.JudgeTaskMessage;
-import com.gusl.gojjudge.judging.application.engine.JudgeEngine;
-import com.gusl.gojjudge.judging.application.engine.JudgeExecutionRequest;
-import com.gusl.gojjudge.judging.application.engine.JudgeSession;
-import com.gusl.gojjudge.judging.application.strategy.NormalJudgeStrategy;
-import com.gusl.gojjudge.judging.domain.checker.ExactOutputChecker;
-import com.gusl.gojjudge.judging.domain.checker.SpecialOutputChecker;
-import com.gusl.gojjudge.judging.domain.exception.JudgeSystemException;
-import com.gusl.gojjudge.judging.domain.model.CheckerConfig;
-import com.gusl.gojjudge.judging.domain.model.TestDataRef;
-import com.gusl.gojjudge.judging.infrastructure.checker.OutputCheckerRegistry;
-import com.gusl.gojjudge.judging.infrastructure.compiler.CompileResult;
-import com.gusl.gojjudge.judging.infrastructure.compiler.Compiler;
-import com.gusl.gojjudge.judging.infrastructure.language.AbstractLanguageAdapter;
-import com.gusl.gojjudge.judging.infrastructure.language.LanguageAdapterRegistry;
-import com.gusl.gojjudge.judging.infrastructure.runner.RunContext;
-import com.gusl.gojjudge.judging.infrastructure.runner.RunResult;
-import com.gusl.gojjudge.judging.infrastructure.runner.Runner;
-import com.gusl.gojjudge.judging.infrastructure.testcase.LocalFileTestCaseProvider;
+import com.gusl.gojjudge.judging.engine.JudgeEngine;
+import com.gusl.gojjudge.judging.engine.JudgeExecutionRequest;
+import com.gusl.gojjudge.judging.engine.JudgeSession;
+import com.gusl.gojjudge.judging.checker.ExactOutputChecker;
+import com.gusl.gojjudge.judging.checker.SpecialOutputChecker;
+import com.gusl.gojjudge.judging.exception.JudgeSystemException;
+import com.gusl.gojjudge.judging.model.CheckerConfig;
+import com.gusl.gojjudge.judging.model.TestDataRef;
+import com.gusl.gojjudge.judging.compiler.CompileResult;
+import com.gusl.gojjudge.judging.compiler.Compiler;
+import com.gusl.gojjudge.judging.language.AbstractLanguageAdapter;
+import com.gusl.gojjudge.judging.language.LanguageAdapterRegistry;
+import com.gusl.gojjudge.judging.runner.RunContext;
+import com.gusl.gojjudge.judging.runner.RunResult;
+import com.gusl.gojjudge.judging.runner.Runner;
+import com.gusl.gojjudge.judging.testcase.LocalFileTestCaseProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,7 +31,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -67,14 +64,13 @@ class SpecialJudgeTests {
         LocalFileTestCaseProvider provider = new LocalFileTestCaseProvider();
         ReflectionTestUtils.setField(provider, "dataRoot", dataRoot.toString());
         ExactOutputChecker exact = new ExactOutputChecker();
-        OutputCheckerRegistry checkers = new OutputCheckerRegistry(
-                List.of(exact, new SpecialOutputChecker(runner, exact)));
+
         LanguageAdapterRegistry languages = mock(LanguageAdapterRegistry.class);
         when(languages.require("solution")).thenReturn(solutionAdapter);
         when(languages.require("checker")).thenReturn(checkerAdapter);
         when(compiler.compile("选手代码", solutionAdapter)).thenReturn(solutionCompiled);
         when(compiler.compile("校验代码", checkerAdapter)).thenReturn(checkerCompiled);
-        engine = new JudgeEngine(languages, List.of(new NormalJudgeStrategy(runner, checkers, provider)), compiler);
+        engine = new JudgeEngine(languages, compiler, runner, provider, exact, new SpecialOutputChecker(runner, exact));
 
         CheckerConfig config = new CheckerConfig();
         config.setCheckType(CheckType.SPECIAL);
@@ -82,9 +78,10 @@ class SpecialJudgeTests {
         config.setSourceCode("校验代码");
         request = JudgeExecutionRequest.builder().language("solution").sourceCode("选手代码")
                 .timeLimitMs(1000L).memoryLimitKb(262144L)
-                .executionMode(ExecutionMode.SPECIAL).checkerConfig(config)
+                .problemType(ProblemType.SPECIAL).checkerConfig(config)
                 .testDataRef(TestDataRef.builder().storagePath("cases").testCaseCount(2).build()).build();
         session = new JudgeSession(new JudgeTaskMessage(), (task, outcome) -> true);
+        session.setRequest(request);
         // 正式入口 JudgeServiceImpl 会先写入 WAIT，再调用引擎。
         session.status(JudgingConstant.WAIT).push();
     }
@@ -94,7 +91,7 @@ class SpecialJudgeTests {
         when(runner.run(eq(solutionAdapter), any())).thenReturn(run("3 1 2\n"), run("2 3 1\n"));
         when(runner.run(eq(checkerAdapter), any())).thenReturn(run("1 2 3\n"));
 
-        engine.judge(request, session);
+        engine.judge(session);
 
         assertEquals(JudgingConstant.ACCEPTED, session.getPending().getCurStatus());
         assertTrue(session.isFinished());
@@ -113,7 +110,7 @@ class SpecialJudgeTests {
         when(runner.run(eq(solutionAdapter), any())).thenReturn(run("1 1 3\n"));
         when(runner.run(eq(checkerAdapter), any())).thenReturn(run("1 1 3\n"));
 
-        engine.judge(request, session);
+        engine.judge(session);
 
         assertEquals(JudgingConstant.WRONG_ANSWER, session.getPending().getCurStatus());
         verify(runner).run(eq(solutionAdapter), any());
@@ -122,10 +119,11 @@ class SpecialJudgeTests {
 
     @Test
     void normalProblemStillComparesOriginalOutput() {
+        request.setProblemType(ProblemType.NORMAL);
         request.getCheckerConfig().setCheckType(CheckType.TEXT);
         when(runner.run(eq(solutionAdapter), any())).thenReturn(run("3 1 2\n"));
 
-        engine.judge(request, session);
+        engine.judge(session);
 
         assertEquals(JudgingConstant.WRONG_ANSWER, session.getPending().getCurStatus());
         verify(compiler, never()).compile("校验代码", checkerAdapter);
@@ -137,7 +135,7 @@ class SpecialJudgeTests {
         checkerCompiled.setStatus(SandBoxStatus.NONZERO_EXIT_STATUS);
         checkerCompiled.setCompileMsg("语法错误");
 
-        assertThrows(JudgeSystemException.class, () -> engine.judge(request, session));
+        assertThrows(JudgeSystemException.class, () -> engine.judge(session));
 
         assertFalse(session.isFinished());
         verifyNoInteractions(runner);
@@ -152,11 +150,45 @@ class SpecialJudgeTests {
         failure.setStatus(SandBoxStatus.TIME_LIMIT_EXCEEDED);
         when(runner.run(eq(checkerAdapter), any())).thenReturn(failure);
 
-        RuntimeException error = assertThrows(RuntimeException.class, () -> engine.judge(request, session));
+        RuntimeException error = assertThrows(RuntimeException.class, () -> engine.judge(session));
 
         assertTrue(error.getMessage().contains("校验程序运行失败"));
         assertFalse(session.isFinished());
         assertEquals(JudgingConstant.RUNNING, session.getPending().getCurStatus());
+        verify(compiler).deleteCacheCompileFile(checkerCompiled);
+        verify(compiler).deleteCacheCompileFile(solutionCompiled);
+    }
+
+    /** 选手编译失败正常结束为 CE，不启动选手或校验程序。 */
+    @Test
+    void solutionCompilationFailureFinishesWithCe() {
+        solutionCompiled.setStatus(SandBoxStatus.NONZERO_EXIT_STATUS);
+        engine.judge(session);
+        assertTrue(session.isFinished());
+        assertEquals(JudgingConstant.COMPILE_ERROR, session.getPending().getCurStatus());
+        verifyNoInteractions(runner);
+        verify(compiler, never()).compile("校验代码", checkerAdapter);
+        verify(compiler).deleteCacheCompileFile(solutionCompiled);
+    }
+
+    /** 交互题仍明确拒绝执行，不进入编译。 */
+    @Test
+    void interactiveProblemRemainsUnsupported() {
+        request.setProblemType(ProblemType.INTERACTION);
+        assertTrue(assertThrows(JudgeSystemException.class, () -> engine.judge(session))
+                .getMessage().contains("暂不支持交互题"));
+        assertFalse(session.isFinished());
+        verifyNoInteractions(compiler, runner);
+    }
+
+    /** 最终回写被拒绝时不能宣布完成，且仍需清理两个编译产物。 */
+    @Test
+    void rejectedFinalWriteDoesNotFinishSession() {
+        session.setWriter((task, outcome) -> !JudgingConstant.TERMINAL_STATUSES.contains(outcome.getCurStatus()));
+        when(runner.run(eq(solutionAdapter), any())).thenReturn(run("3 1 2\n"));
+        when(runner.run(eq(checkerAdapter), any())).thenReturn(run("1 2 3\n"));
+        assertThrows(JudgeSystemException.class, () -> engine.judge(session));
+        assertFalse(session.isFinished());
         verify(compiler).deleteCacheCompileFile(checkerCompiled);
         verify(compiler).deleteCacheCompileFile(solutionCompiled);
     }

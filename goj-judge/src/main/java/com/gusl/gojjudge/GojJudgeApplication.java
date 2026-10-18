@@ -14,10 +14,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  */
 @EnableScheduling
 @SpringBootApplication
-@EnableFeignClients(basePackages = "com.gusl.gojjudge.judging.infrastructure.sandbox")
+@EnableFeignClients(basePackages = "com.gusl.gojjudge.judging.sandbox")
 @MapperScan({
-        "com.gusl.gojjudge.task.infrastructure.persistence",
-        "com.gusl.gojjudge.judging.infrastructure.persistence"
+        "com.gusl.gojjudge.task.mapper",
+        "com.gusl.gojjudge.judging.mapper"
 })
 public class GojJudgeApplication {
 
