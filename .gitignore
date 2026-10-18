@@ -11,3 +11,14 @@ goj-web/dist/
 goj-web/.vite/
 
 .agents/**
+/docs/wayfinder/cache.md
+/GLOSSARY.md
+/docs/wayfinder/health.md
+/docs/wayfinder/languages.md
+/docs/wayfinder/lease.md
+/docs/wayfinder/map.md
+/docs/optimization-resume-draft.md
+/docs/project-context.md
+/docs/wayfinder/ranking.md
+/docs/wayfinder/scope.md
+/docs/wayfinder/status.md
