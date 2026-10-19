@@ -93,6 +93,9 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
 
         // 保存 submission 到数据库
         Submission submission = BeanUtil.copyProperties(submission2JudgeDto, Submission.class);
+        submission.setSubmissionType(SubmissionType.REGULAR);
+        submission.setContestId(null);
+        submission.setVersion(1);
         submission.setStatus(JudgingConstant.IN_QUEUE);
         submission.setUserId(userId);
         submission.setSubmissionTime(LocalDateTime.now());
@@ -125,7 +128,7 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
     @Override
     public SubmissionDetailVo getSubmissionById(Long submissionId) {
         Submission submission = getById(submissionId);
-        if (submission == null) {
+        if (submission == null || !SubmissionType.REGULAR.equals(submission.getSubmissionType())) {
             throw new BaseException("提交不存在");
         }
 
@@ -149,6 +152,7 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
         Page<Submission> submissions = submissionMapper.selectPage(
                 page,
                 Wrappers.<Submission>lambdaQuery()
+                        .eq(Submission::getSubmissionType, SubmissionType.REGULAR)
                         .eq(Submission::getUserId, loginUser.getUserId())
                         .eq(condition.getProblemId() != null,
                                 Submission::getProblemId,
@@ -182,6 +186,7 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
         Page<Submission> submissionPage = submissionMapper.selectPage(
                 new Page<>(1, sysProperties.getProfile().getRecentSubmissionSize(), false),
                 Wrappers.<Submission>lambdaQuery()
+                        .eq(Submission::getSubmissionType, SubmissionType.REGULAR)
                         .eq(Submission::getUserId, loginUser.getUserId())
                         .orderByDesc(Submission::getId)
         );
@@ -201,6 +206,7 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
     private void requireNoRecentDuplicate(Submission2JudgeDto dto, Long userId, String sha256) {
         Long count = submissionMapper.selectCount(
                 Wrappers.<Submission>lambdaQuery()
+                        .eq(Submission::getSubmissionType, SubmissionType.REGULAR)
                         .eq(Submission::getProblemId, dto.getProblemId())
                         .eq(Submission::getSourceSha256, sha256)
                         .eq(Submission::getUserId, userId)

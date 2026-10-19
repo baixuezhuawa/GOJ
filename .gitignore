@@ -22,3 +22,9 @@ goj-web/.vite/
 /docs/wayfinder/ranking.md
 /docs/wayfinder/scope.md
 /docs/wayfinder/status.md
+/docs/wayfinder/judge-simplification/01-session.md
+/docs/wayfinder/judge-simplification/02-execution.md
+/docs/wayfinder/judge-simplification/03-task-state.md
+/docs/wayfinder/judge-simplification/map.md
+/goj-judge/README.md
+/docs/submission-unification.md

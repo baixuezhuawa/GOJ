@@ -37,6 +37,14 @@ public class Submission extends BaseEntity {
     @Schema(description = "题目 id")
     private Long problemId;
 
+    /** 提交类型：REGULAR、CONTEST、PROBLEM_REVIEW。 */
+    @Schema(description = "提交类型")
+    private String submissionType;
+
+    /** 比赛 id，非比赛提交为空。 */
+    @Schema(description = "比赛 id")
+    private Long contestId;
+
     /** 编程语言编码，例如 JAVA。 */
     @Schema(description = "编程语言")
     private String language;
@@ -84,4 +92,8 @@ public class Submission extends BaseEntity {
     @Schema(description = "源代码的sha256值, 用于判断重复提交")
     @TableField("source_sha256")
     private String sourceSha256;
+
+    /** 测评版本，用于同一提交的重测。 */
+    @Schema(description = "测评版本")
+    private Integer version;
 }

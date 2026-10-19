@@ -8,12 +8,13 @@ import com.gusl.common.common.BaseException;
 import com.gusl.common.common.PageQuery;
 import com.gusl.common.common.PageResult;
 import com.gusl.common.constant.ContestStatus;
+import com.gusl.common.constant.SubmissionType;
 import com.gusl.common.constant.JudgingConstant;
 import com.gusl.common.pojo.entity.*;
 import com.gusl.gojserver.contest.infrastructure.persistence.ContestMapper;
 import com.gusl.gojserver.contest.infrastructure.persistence.ContestParticipateMapper;
 import com.gusl.gojserver.contest.infrastructure.persistence.ContestProblemMapper;
-import com.gusl.gojserver.contest.infrastructure.persistence.ContestSubmissionMapper;
+import com.gusl.gojserver.submission.infrastructure.persistence.SubmissionMapper;
 import com.gusl.gojserver.account.infrastructure.persistence.UserMapper;
 import com.gusl.gojserver.contest.application.model.ContestRankSnapshot;
 import com.gusl.gojserver.account.domain.model.User;
@@ -41,7 +42,7 @@ public class ContestRankService {
 
     private final ContestMapper contestMapper;
 
-    private final ContestSubmissionMapper contestSubmissionMapper;
+    private final SubmissionMapper submissionMapper;
 
     private final ContestProblemMapper contestProblemMapper;
 
@@ -168,16 +169,17 @@ public class ContestRankService {
         );
 
         // 获取比赛全部提交
-        Future<List<ContestSubmission>> submissionSubmit = contestRankExecutor.submit(() ->
-                contestSubmissionMapper.selectList(
-                        Wrappers.<ContestSubmission>lambdaQuery()
-                                .eq(ContestSubmission::getContestId, contestId)
-                                .ge(ContestSubmission::getSubmissionTime, contest.getStartTime())
-                                .lt(ContestSubmission::getSubmissionTime, contest.getEndTime())
-                                .orderByAsc(ContestSubmission::getUserId)
-                                .orderByAsc(ContestSubmission::getProblemId)
-                                .orderByAsc(ContestSubmission::getSubmissionTime)
-                                .orderByAsc(ContestSubmission::getId)
+        Future<List<Submission>> submissionSubmit = contestRankExecutor.submit(() ->
+                submissionMapper.selectList(
+                        Wrappers.<Submission>lambdaQuery()
+                                .eq(Submission::getContestId, contestId)
+                                .eq(Submission::getSubmissionType, SubmissionType.CONTEST)
+                                .ge(Submission::getSubmissionTime, contest.getStartTime())
+                                .lt(Submission::getSubmissionTime, contest.getEndTime())
+                                .orderByAsc(Submission::getUserId)
+                                .orderByAsc(Submission::getProblemId)
+                                .orderByAsc(Submission::getSubmissionTime)
+                                .orderByAsc(Submission::getId)
                 )
         );
 
@@ -185,7 +187,7 @@ public class ContestRankService {
 
         List<ContestProblem> contestProblems = contestProblemSubmit.get();
 
-        List<ContestSubmission> submissions = submissionSubmit.get();
+        List<Submission> submissions = submissionSubmit.get();
 
 
         // 开始计算结果
@@ -215,7 +217,7 @@ public class ContestRankService {
 
     private ContestRankingRowVo calculateUserRowVo(
             User user,
-            List<ContestSubmission> submissions,
+            List<Submission> submissions,
             List<ContestProblem> contestProblems,
             Contest contest
     ){
@@ -270,7 +272,7 @@ public class ContestRankService {
                     submissions.get(p).getUserId().equals(userId) &&
                     submissions.get(p).getProblemId().equals(cs.getProblemId())
             ){
-                ContestSubmission submission = submissions.get(p++);
+                Submission submission = submissions.get(p++);
 
                 if (problemResults.isAccepted()){
                     continue;

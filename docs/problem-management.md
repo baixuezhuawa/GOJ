@@ -23,7 +23,7 @@
 | 启用或停用数据 | `PUT /problems/{problemId}/test-data/{version}/active` | `active=true/false` |
 | 删除数据版本 | `DELETE /problems/{problemId}/test-data/{version}` | 无 |
 | 下载原始 ZIP | `GET /problems/{problemId}/test-data/{version}/archive` | 无 |
-| 提交验题代码 | `POST /problems/{problemId}/judge-submissions` | JSON：`version`、`language`、`sourceCode` |
+| 提交验题代码 | `POST /problems/{problemId}/judge-submissions` | JSON：`language`、`sourceCode` |
 | 查询验题结果 | `GET /judge-submissions/{reviewSubmissionId}` | 无 |
 
 原管理员难度、标签接口保留。创建接口已从 multipart 改为 JSON。题目创建和上传数据是两个独立操作，不提供重复的组合接口。
@@ -55,9 +55,9 @@ goj.data-root/
 
 ## 覆盖、删除与正在运行的判题
 
-验题指定一个数据版本，不依赖题目发布状态，也不要求数据已启用。保留独立验题表、任务和队列，不再使用审批流程；现有 `PROBLEM_REVIEW` 类型和表名暂时保留，避免无收益的协议迁移。
+验题不再指定数据版本；Worker 执行时按版本号降序读取最新上传版本，允许尚未启用，不依赖题目发布状态。普通、比赛和验题均保存到 `submission`，通过 `submission_type` 区分；任务类型和调度优先级保持不变。
 
-覆盖同版本保留数据 ID，因此比赛和验题再次加载该 ID 时读取新内容。历史已保存的判题结果不会自动改写，也不自动触发重测。普通提交仍在执行时选择当前启用版本。
+覆盖同版本保留数据 ID，因此比赛再次加载绑定 ID 时读取新内容；验题执行时重新选择最新版本。历史已保存的判题结果不会自动改写，也不自动触发重测。普通提交仍在执行时选择当前启用版本。
 
 管理员允许覆盖或删除任何版本。已打开旧目录的运行中任务，可能因旧文件被删除而失败；删除后保留的历史引用也可能失效。系统不阻止操作、不自动修复，由管理员安排操作和重测。删除后重新创建同版本会得到新 ID，不会自动修复旧引用。
 
@@ -68,14 +68,14 @@ goj.data-root/
 - `ProblemServiceImpl`：创建、编辑和设置题目状态。
 - `ProblemTestDataServiceImpl`：版本元信息与启用标记。
 - `TestDataStorage`：文件格式、布局和校验的唯一入口。
-- `ProblemReviewJudgeServiceImpl` / `ProblemReviewJudgeHandler`：按指定数据版本验题。
+- `ProblemReviewJudgeServiceImpl` / `JudgeServiceImpl`：创建验题提交并使用最新上传的数据版本。
 - `ProblemInfoVo`：显式声明公开字段，避免未来给 `Problem` 增加标准程序等内部字段时自动公开。
 
 以后增加标准检测程序字段，按实际需要修改实体、SQL、管理员保存 DTO 和 Judge 请求组装即可，不再贯穿用户投稿和审批链路。上传方式变化主要修改存储类；只有变化影响 Judge 实际读取格式时才需要调整读取器。
 
 ## 已有数据迁移
 
-SQL 目录仅维护完整表结构和开发初始化数据，历史一次性迁移脚本已移除。保留旧数据的升级需要依据实际结构单独处理；Server 和 Judge 应一起更新。
+SQL 目录维护完整表结构和开发初始化数据。本次提交合表另提供 `sql/migrations/20261019_unify_submissions.sql`，用法见 [统一提交记录](submission-unification.md)；更早的题目管理结构升级仍需依据实际结构处理，Server 和 Judge 应一起更新。
 
 - 全新环境使用更新后的 `sql/schema.sql`、`sql/data.sql`。`schema.sql` 包含删表语句，不能用于保留数据的升级。
 - 已有环境先停止 Server 和 Judge、备份，再对照当前 `schema.sql` 检查需要调整的结构，不能直接重跑初始化脚本。
@@ -89,7 +89,7 @@ SQL 目录仅维护完整表结构和开发初始化数据，历史一次性迁�
 无需数据库的定向测试覆盖原包下载、完整摘要、ZIP 和结构错误、覆盖失败保留旧数据、同版本覆盖保留 ID、管理员删除已启用版本、启用切换、无数据创建与发布校验，以及 Spring 方法权限和 Judge 验题加载。
 
 ```powershell
-mvn -B '-Dtest=TestDataStorageTests,ProblemTestDataServiceTests,ProblemManagementTests,ProblemManagementSecurityTests,ProblemReviewJudgeHandlerTests' '-Dsurefire.failIfNoSpecifiedTests=false' test
+mvn -B '-Dtest=TestDataStorageTests,ProblemTestDataServiceTests,ProblemManagementTests,ProblemManagementSecurityTests,JudgeServiceTests,UnifiedSubmissionTests' '-Dsurefire.failIfNoSpecifiedTests=false' test
 ```
 
 这些测试不等同于真实 MySQL、Redis、沙箱和 HTTP 联调；迁移脚本也需要在实际数据库升级时验证。

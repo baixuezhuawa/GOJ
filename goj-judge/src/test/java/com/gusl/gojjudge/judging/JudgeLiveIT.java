@@ -3,7 +3,7 @@ package com.gusl.gojjudge.judging;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gusl.gojjudge.GojJudgeApplication;
 import com.gusl.common.constant.JudgeQueueConstant;
-import com.gusl.gojjudge.task.JudgeTaskStateService;
+import com.gusl.gojjudge.task.JudgeTaskProcessor;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.apache.rocketmq.common.message.Message;
 import org.apache.rocketmq.client.impl.MQClientAPIImpl;
@@ -63,7 +63,7 @@ class JudgeLiveIT {
                 created = true;
                 // 只复制现有表结构，不复制用户数据，也不执行仓库中的删表脚本。
                 for (String table : List.of("problem", "problem_checker", "problem_test_data", "submission",
-                        "problem_review_submission", "contest_submission", "contest_problem", "judge_task",
+                        "contest_problem", "judge_task",
                         "user_problem_progress", "user_activity_day", "user_language_stat", "user_submission_status_stat")) {
                     statement.execute("CREATE TABLE `" + database + "`.`" + table + "` LIKE `goj`.`" + table + "`");
                 }
@@ -124,7 +124,7 @@ class JudgeLiveIT {
 
                 // 模拟业务已落库但任务成功写入中断，恢复只补齐任务状态。
                 jdbc.update("UPDATE judge_task SET status='PROCESSING',lease_owner='stopped-worker',lease_expire_time=DATE_SUB(NOW(), INTERVAL 1 MINUTE) WHERE id=1");
-                context.getBean(JudgeTaskStateService.class).recover(1L);
+                context.getBean(JudgeTaskProcessor.class).recover(1L);
                 assertEquals("SUCCEEDED", jdbc.queryForObject("SELECT status FROM judge_task WHERE id=1", String.class));
                 assertEquals(statsBefore, jdbc.queryForObject("SELECT SUM(submission_count) FROM user_language_stat", Long.class));
                 System.out.println("LIVE_PASS duplicate_delivery_and_terminal_recovery");
@@ -178,9 +178,11 @@ class JudgeLiveIT {
     /** 投递任务并轮询数据库，系统故障等待到重试时间后再次通过真实 MQ 投递。 */
     private void runCase(long id, String type, long problem, String language, String source, String expected, int attempts) throws Exception {
         String table = table(type);
-        String columns = type.equals("PROBLEM_REVIEW") ? "reviewer_id,problem_test_data_id" : type.equals("CONTEST_SUBMISSION") ? "user_id,contest_id,version" : "user_id";
-        String values = type.equals("PROBLEM_REVIEW") ? "1," + problem : type.equals("CONTEST_SUBMISSION") ? "1,1,1" : "1";
-        jdbc.update("INSERT INTO " + table + " (id,problem_id,language,source_code,status,source_sha256," + columns + ") VALUES (?,?,?,?,'in queue',REPEAT('0',64)," + values + ")", id, problem, language, source);
+        String submissionType = type.equals("SUBMISSION") ? "REGULAR"
+                : type.equals("CONTEST_SUBMISSION") ? "CONTEST" : "PROBLEM_REVIEW";
+        Long contestId = type.equals("CONTEST_SUBMISSION") ? 1L : null;
+        jdbc.update("INSERT INTO submission (id,problem_id,language,source_code,status,source_sha256,user_id,submission_type,contest_id,version) VALUES (?,?,?,?,'in queue',REPEAT('0',64),1,?,?,1)",
+                id, problem, language, source, submissionType, contestId);
         jdbc.update("INSERT INTO judge_task (id,task_type,business_id,task_version,status,max_attempts) VALUES (?,?,?,1,'PENDING',?)", id, type, id, attempts);
         send(id, type);
         long deadline = System.nanoTime() + 90_000_000_000L;
@@ -222,10 +224,8 @@ class JudgeLiveIT {
         }
     }
 
-    /** 表名仅来自测试内部的固定类型，不能由外部输入拼接。 */
+    /** 所有场景均读取统一提交表。 */
     private String table(String type) {
-        if (type.equals("SUBMISSION")) return "submission";
-        if (type.equals("CONTEST_SUBMISSION")) return "contest_submission";
-        return "problem_review_submission";
+        return "submission";
     }
 }

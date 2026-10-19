@@ -8,7 +8,7 @@ import com.gusl.common.constant.*;
 import com.gusl.common.pojo.entity.*;
 import com.gusl.gojserver.judgetask.infrastructure.persistence.JudgeTaskMapper;
 import com.gusl.gojserver.problem.infrastructure.persistence.ProblemMapper;
-import com.gusl.gojserver.problem.infrastructure.persistence.ProblemReviewSubmissionMapper;
+import com.gusl.gojserver.submission.infrastructure.persistence.SubmissionMapper;
 import com.gusl.gojserver.problem.infrastructure.persistence.ProblemTestDataMapper;
 import com.gusl.gojserver.problem.application.dto.ProblemReviewJudgeDto;
 import com.gusl.gojserver.account.infrastructure.security.LoginUser;
@@ -22,16 +22,16 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 
 /**
- * 管理员验题提交服务实现，使用独立数据表和独立 Redis 队列。
+ * 管理员验题提交服务，保存到统一提交表并创建调度任务。
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProblemReviewJudgeServiceImpl
-        extends ServiceImpl<ProblemReviewSubmissionMapper, ProblemReviewSubmission>
+        extends ServiceImpl<SubmissionMapper, Submission>
         implements ProblemReviewJudgeService {
 
-    private final ProblemReviewSubmissionMapper reviewSubmissionMapper;
+    private final SubmissionMapper submissionMapper;
 
     private final ProblemMapper problemMapper;
 
@@ -54,36 +54,35 @@ public class ProblemReviewJudgeServiceImpl
         // 管理员可对任意状态的题目验题。
         requireProblem(problemId);
 
-        // 固定本次任务使用的测试数据集，避免 Worker 再按题目状态猜测数据来源。
-        ProblemTestData testData = requireTestData(problemId, dto.getVersion());
+        // 提交时检查数据存在，Worker 执行时读取最新上传版本。
+        requireLatestTestData(problemId);
 
         // 执行普通提交与验题提交共同的语言、源码和摘要校验。
         String sha256 = judgeSourceValidator.validateAndHash(dto.getLanguage(), dto.getSourceCode());
 
-        return enqueueSubmission(problemId, testData, loginUser.getUserId(), sha256, dto.getLanguage(), dto.getSourceCode());
+        return enqueueSubmission(problemId, loginUser.getUserId(), sha256, dto.getLanguage(), dto.getSourceCode());
     }
 
     /** 保存验题提交和可调度任务。 */
     private Long enqueueSubmission(
             Long problemId,
-            ProblemTestData data,
             Long userId,
             String sha256,
             String language,
             String sourceCode
     ){
-        // 写入独立验题表和任务表，由任务调度器投递 Redis 队列。
-        ProblemReviewSubmission submission = ProblemReviewSubmission.builder()
-                .problemId(problemId)
-                .problemTestDataId(data.getId())
-                .reviewerId(userId)
-                .language(language)
-                .sourceCode(sourceCode)
-                .sourceSha256(sha256)
-                .status(JudgingConstant.IN_QUEUE)
-                .submissionTime(LocalDateTime.now())
-                .build();
-        reviewSubmissionMapper.insert(submission);
+        // 在同一事务内保存提交记录和调度任务。
+        Submission submission = new Submission();
+        submission.setProblemId(problemId);
+        submission.setUserId(userId);
+        submission.setSubmissionType(SubmissionType.PROBLEM_REVIEW);
+        submission.setVersion(1);
+        submission.setLanguage(language);
+        submission.setSourceCode(sourceCode);
+        submission.setSourceSha256(sha256);
+        submission.setStatus(JudgingConstant.IN_QUEUE);
+        submission.setSubmissionTime(LocalDateTime.now());
+        submissionMapper.insert(submission);
 
 
         JudgeTask judgeTask = JudgeTask.builder()
@@ -102,11 +101,13 @@ public class ProblemReviewJudgeServiceImpl
      */
     @Override
     public ProblemReviewSubmissionVo getReviewSubmission(Long reviewSubmissionId) {
-        ProblemReviewSubmission submission = reviewSubmissionMapper.selectById(reviewSubmissionId);
-        if (submission == null) {
+        Submission submission = submissionMapper.selectById(reviewSubmissionId);
+        if (submission == null || !SubmissionType.PROBLEM_REVIEW.equals(submission.getSubmissionType())) {
             throw new BaseException("验题提交不存在");
         }
-        return BeanUtil.copyProperties(submission, ProblemReviewSubmissionVo.class);
+        ProblemReviewSubmissionVo vo = BeanUtil.copyProperties(submission, ProblemReviewSubmissionVo.class);
+        vo.setReviewerId(submission.getUserId());
+        return vo;
     }
 
     /**
@@ -125,18 +126,16 @@ public class ProblemReviewJudgeServiceImpl
         }
     }
 
-    /** 获取管理员指定的数据版本，不要求启用，也不依赖题目状态。 */
-    private ProblemTestData requireTestData(Long problemId, Integer version) {
-        if (version == null || version <= 0) {
-            throw new BaseException("请选择验题使用的测试数据版本");
-        }
+    /** 检查题目最新上传版本存在，不要求启用。 */
+    private ProblemTestData requireLatestTestData(Long problemId) {
         ProblemTestData testData = problemTestDataMapper.selectOne(
                 Wrappers.<ProblemTestData>lambdaQuery()
                         .eq(ProblemTestData::getProblemId, problemId)
-                        .eq(ProblemTestData::getVersion, version)
+                        .orderByDesc(ProblemTestData::getVersion)
+                        .last("LIMIT 1")
         );
         if (testData == null) {
-            throw new BaseException("测试数据版本不存在");
+            throw new BaseException("题目没有测试数据");
         }
         return testData;
     }

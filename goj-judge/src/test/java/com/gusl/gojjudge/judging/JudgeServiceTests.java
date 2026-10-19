@@ -1,9 +1,11 @@
 package com.gusl.gojjudge.judging;
 
 import com.gusl.common.constant.JudgingConstant;
+import com.gusl.common.constant.SubmissionType;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.gusl.gojjudge.judging.result.SubmissionResultService;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.mockito.ArgumentCaptor;
 import com.gusl.common.constant.ProblemStatus;
@@ -12,18 +14,14 @@ import com.gusl.gojjudge.judging.engine.JudgeRequestConfigurer;
 import com.gusl.gojjudge.judging.mapper.ProblemCheckerMapper;
 import com.gusl.common.pojo.entity.JudgeTaskMessage;
 import com.gusl.common.pojo.entity.Problem;
-import com.gusl.common.pojo.entity.ProblemReviewSubmission;
+import com.gusl.common.pojo.entity.Submission;
 import com.gusl.common.pojo.entity.ProblemTestData;
-import com.gusl.gojjudge.judging.JudgeServiceImpl;
 import com.gusl.gojjudge.judging.engine.JudgeEngine;
 import com.gusl.gojjudge.judging.engine.JudgeSession;
 import com.gusl.common.constant.JudgeTaskType;
 import com.gusl.gojjudge.judging.mapper.SubmissionMapper;
-import com.gusl.gojjudge.judging.mapper.ContestSubmissionMapper;
 import com.gusl.gojjudge.judging.mapper.ContestProblemMapper;
-import com.gusl.gojjudge.judging.result.SubmissionResultService;
 import com.gusl.gojjudge.judging.mapper.ProblemMapper;
-import com.gusl.gojjudge.judging.mapper.ProblemReviewSubmissionMapper;
 import com.gusl.gojjudge.judging.mapper.ProblemTestDataMapper;
 import org.junit.jupiter.api.Test;
 
@@ -35,13 +33,18 @@ import static org.mockito.Mockito.*;
 class JudgeServiceTests {
 
     @Test
-    void loadsCurrentContentForReferencedDatasetWithoutReviewState() {
+    void loadsLatestUnactivatedDatasetForReview() {
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), ""), ProblemTestData.class);
-        ProblemReviewSubmissionMapper submissions = mock(ProblemReviewSubmissionMapper.class);
+        SubmissionMapper submissions = mock(SubmissionMapper.class);
         ProblemMapper problems = mock(ProblemMapper.class);
         ProblemTestDataMapper datasets = mock(ProblemTestDataMapper.class);
-        ProblemReviewSubmission submission = ProblemReviewSubmission.builder().id(1L).problemId(2L)
-                .problemTestDataId(3L).status(JudgingConstant.IN_QUEUE).sourceCode("code").language("java21").build();
+        Submission submission = new Submission();
+        submission.setId(1L);
+        submission.setProblemId(2L);
+        submission.setSubmissionType(SubmissionType.PROBLEM_REVIEW);
+        submission.setStatus(JudgingConstant.IN_QUEUE);
+        submission.setSourceCode("code");
+        submission.setLanguage("java21");
         Problem problem = new Problem();
         problem.setId(2L);
         problem.setStatus(ProblemStatus.DRAFT);
@@ -61,8 +64,7 @@ class JudgeServiceTests {
             session.status(JudgingConstant.ACCEPTED).push();
             return null;
         }).when(engine).judge(any());
-        JudgeServiceImpl service = new JudgeServiceImpl(mock(SubmissionMapper.class), submissions,
-                mock(ContestSubmissionMapper.class), results, problems, datasets,
+        JudgeServiceImpl service = new JudgeServiceImpl(submissions, results, problems, datasets,
                 mock(ContestProblemMapper.class), new JudgeRequestConfigurer(mock(ProblemCheckerMapper.class)), engine);
         JudgeTaskMessage message = new JudgeTaskMessage();
         message.setBusinessId(1L);
@@ -80,6 +82,7 @@ class JudgeServiceTests {
         ArgumentCaptor<LambdaQueryWrapper<ProblemTestData>> capture = ArgumentCaptor.forClass(LambdaQueryWrapper.class);
         verify(datasets).selectOne(capture.capture());
         assertFalse(capture.getValue().getSqlSegment().contains("active"));
+        assertTrue(capture.getValue().getSqlSegment().contains("ORDER BY version DESC LIMIT 1"));
         assertFalse(capture.getValue().getSqlSegment().contains("status"));
     }
 }

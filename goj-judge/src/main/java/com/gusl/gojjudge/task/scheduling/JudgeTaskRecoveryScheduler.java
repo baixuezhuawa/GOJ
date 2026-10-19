@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.gusl.common.constant.JudgeTaskStatus;
 import com.gusl.common.pojo.entity.JudgeTask;
 import com.gusl.gojjudge.task.mapper.JudgeTaskMapper;
-import com.gusl.gojjudge.task.JudgeTaskStateService;
+import com.gusl.gojjudge.task.JudgeTaskProcessor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -23,7 +23,7 @@ public class JudgeTaskRecoveryScheduler {
 
     private final JudgeTaskMapper judgeTaskMapper;
 
-    private final JudgeTaskStateService taskStateService;
+    private final JudgeTaskProcessor taskProcessor;
 
     /**
      * 定时扫描租约过期且处于 PROCESSING 的任务。
@@ -41,8 +41,8 @@ public class JudgeTaskRecoveryScheduler {
 
         for (JudgeTask judgeTask : judgeTasks) {
             try {
-                // 每条任务通过独立 Service 调用开启事务，避免单条失败影响整个批次。
-                taskStateService.recover(judgeTask.getId());
+                // 每条任务由 Processor 开启独立短事务，单条失败不影响整个批次。
+                taskProcessor.recover(judgeTask.getId());
             } catch (Exception exception) {
                 log.error("恢复租约过期任务失败，taskId={}", judgeTask.getId(), exception);
             }

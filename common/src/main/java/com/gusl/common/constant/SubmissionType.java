@@ -10,4 +10,7 @@ public class SubmissionType {
 
     /** 比赛提交 */
     public static final String CONTEST = "CONTEST";
+
+    /** 管理员验题提交。 */
+    public static final String PROBLEM_REVIEW = "PROBLEM_REVIEW";
 }

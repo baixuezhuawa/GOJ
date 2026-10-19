@@ -11,7 +11,7 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 /**
- * 测评任务实体，记录普通提交和管理员验题任务的调度、重试及执行状态。
+ * 测评任务实体，记录普通、比赛和验题任务的调度、重试及执行状态。
  */
 @Schema(description = "测评任务实体")
 @TableName("judge_task")
@@ -31,7 +31,7 @@ public class JudgeTask extends BaseEntity {
     @Schema(description = "任务类型")
     private String taskType;
 
-    /** 对应的提交或验题提交记录 id。 */
+    /** 统一 submission 表的提交记录 id。 */
     @Schema(description = "业务记录 id")
     private Long businessId;
 

@@ -19,9 +19,6 @@ public class ProblemReviewSubmissionVo {
     @Schema(description = "题目 id")
     private Long problemId;
 
-    @Schema(description = "测试数据集 id")
-    private Long problemTestDataId;
-
     @Schema(description = "管理员 id")
     private Long reviewerId;
 

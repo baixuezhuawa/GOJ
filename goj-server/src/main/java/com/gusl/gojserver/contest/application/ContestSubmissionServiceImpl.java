@@ -15,7 +15,7 @@ import com.gusl.gojserver.shared.infrastructure.config.properties.SysProperties;
 import com.gusl.gojserver.contest.infrastructure.persistence.ContestMapper;
 import com.gusl.gojserver.contest.infrastructure.persistence.ContestParticipateMapper;
 import com.gusl.gojserver.contest.infrastructure.persistence.ContestProblemMapper;
-import com.gusl.gojserver.contest.infrastructure.persistence.ContestSubmissionMapper;
+import com.gusl.gojserver.submission.infrastructure.persistence.SubmissionMapper;
 import com.gusl.gojserver.judgetask.infrastructure.persistence.JudgeTaskMapper;
 import com.gusl.gojserver.contest.application.dto.ContestSubmission2JudgeDto;
 import com.gusl.gojserver.submission.application.dto.Submission2JudgeDto;
@@ -37,10 +37,10 @@ import java.time.LocalDateTime;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class ContestSubmissionServiceImpl extends ServiceImpl<ContestSubmissionMapper, ContestSubmission> implements ContestSubmissionService {
+public class ContestSubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submission> implements ContestSubmissionService {
 
 
-    private final ContestSubmissionMapper contestSubmissionMapper;
+    private final SubmissionMapper submissionMapper;
 
     private final ContestProblemMapper contestProblemMapper;
 
@@ -136,15 +136,15 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<ContestSubmissionM
             PageQuery pageQuery,
             LoginUser loginUser
     ) {
-        Page<ContestSubmission> page = pageFactory.create(pageQuery);
+        Page<Submission> page = pageFactory.create(pageQuery);
 
-        Page<ContestSubmission> contestSubmissionPage = contestSubmissionMapper.selectPage(
+        Page<Submission> contestSubmissionPage = submissionMapper.selectPage(
                 page,
-                Wrappers.<ContestSubmission>lambdaQuery()
-                        .eq(ContestSubmission::getUserId, loginUser.getUserId())
-                        .eq(ContestSubmission::getContestId, contestId)
-                        .eq(ContestSubmission::getUserId, loginUser.getUserId())
-                        .orderByDesc(ContestSubmission::getId)
+                Wrappers.<Submission>lambdaQuery()
+                        .eq(Submission::getUserId, loginUser.getUserId())
+                        .eq(Submission::getContestId, contestId)
+                        .eq(Submission::getSubmissionType, SubmissionType.CONTEST)
+                        .orderByDesc(Submission::getId)
         );
 
         IPage<ContestSubmissionListVo> result = contestSubmissionPage.convert(contestSubmission -> {
@@ -174,10 +174,11 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<ContestSubmissionM
             Long submissionId,
             LoginUser loginUser
     ) {
-        ContestSubmission submission = contestSubmissionMapper.selectOne(
-                Wrappers.<ContestSubmission> lambdaQuery()
-                        .eq(ContestSubmission::getContestId, contestId)
-                        .eq(ContestSubmission::getId, submissionId)
+        Submission submission = submissionMapper.selectOne(
+                Wrappers.<Submission> lambdaQuery()
+                        .eq(Submission::getContestId, contestId)
+                        .eq(Submission::getId, submissionId)
+                        .eq(Submission::getSubmissionType, SubmissionType.CONTEST)
         );
         if(submission == null){
             throw new BaseException("该提交不存在");
@@ -252,18 +253,18 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<ContestSubmissionM
             String sha256
     ){
         // 保存 submission 到数据库
-        ContestSubmission submission = ContestSubmission.builder()
-                .status(JudgingConstant.IN_QUEUE)
-                .userId(userId)
-                .contestId(contestId)
-                .problemId(problemId)
-                .submissionTime(LocalDateTime.now())
-                .sourceSha256(sha256)
-                .sourceCode(dto.getSourceCode())
-                .language(dto.getLanguage())
-                .version(1)
-                .build();
-        contestSubmissionMapper.insert(submission);
+        Submission submission = new Submission();
+        submission.setStatus(JudgingConstant.IN_QUEUE);
+        submission.setSubmissionType(SubmissionType.CONTEST);
+        submission.setUserId(userId);
+        submission.setContestId(contestId);
+        submission.setProblemId(problemId);
+        submission.setSubmissionTime(LocalDateTime.now());
+        submission.setSourceSha256(sha256);
+        submission.setSourceCode(dto.getSourceCode());
+        submission.setLanguage(dto.getLanguage());
+        submission.setVersion(1);
+        submissionMapper.insert(submission);
 
         log.info("比赛id:{} 提交用户id:{} 测评问题id:{} 测评id:{}",
                 contestId,
@@ -294,14 +295,15 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<ContestSubmissionM
             Long userId,
             String sha256
     ) {
-        Long count = contestSubmissionMapper.selectCount(
-                Wrappers.<ContestSubmission>lambdaQuery()
-                        .eq(ContestSubmission::getContestId, contestId)
-                        .eq(ContestSubmission::getProblemId, problemId)
-                        .eq(ContestSubmission::getSourceSha256, sha256)
-                        .eq(ContestSubmission::getUserId, userId)
-                        .eq(ContestSubmission::getLanguage, dto.getLanguage())
-                        .ge(ContestSubmission::getSubmissionTime,
+        Long count = submissionMapper.selectCount(
+                Wrappers.<Submission>lambdaQuery()
+                        .eq(Submission::getContestId, contestId)
+                        .eq(Submission::getProblemId, problemId)
+                        .eq(Submission::getSubmissionType, SubmissionType.CONTEST)
+                        .eq(Submission::getSourceSha256, sha256)
+                        .eq(Submission::getUserId, userId)
+                        .eq(Submission::getLanguage, dto.getLanguage())
+                        .ge(Submission::getSubmissionTime,
                                 LocalDateTime.now().minusMinutes(
                                         sysProperties.getProfile()
                                                 .getFrequencyOfRepeatedSubmissions()

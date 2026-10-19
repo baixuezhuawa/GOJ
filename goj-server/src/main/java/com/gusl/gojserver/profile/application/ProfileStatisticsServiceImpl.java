@@ -3,6 +3,7 @@ package com.gusl.gojserver.profile.application;
 import cn.hutool.core.collection.CollectionUtil;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.gusl.common.pojo.entity.Submission;
+import com.gusl.common.constant.SubmissionType;
 import com.gusl.common.pojo.entity.UserActivityDay;
 import com.gusl.common.pojo.entity.UserProblemProgress;
 import com.gusl.gojserver.submission.infrastructure.persistence.SubmissionMapper;
@@ -51,6 +52,7 @@ public class ProfileStatisticsServiceImpl implements ProfileStatisticsService {
         // 提交总数
         Long submitCount = submissionMapper.selectCount(
                 Wrappers.<Submission>lambdaQuery()
+                        .eq(Submission::getSubmissionType, SubmissionType.REGULAR)
                         .eq(Submission::getUserId, userId)
         );
 

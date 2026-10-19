@@ -4,14 +4,14 @@ package com.gusl.gojserver.contest.application;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.gusl.common.common.PageQuery;
 import com.gusl.common.common.PageResult;
-import com.gusl.common.pojo.entity.ContestSubmission;
+import com.gusl.common.pojo.entity.Submission;
 import com.gusl.gojserver.contest.application.dto.ContestSubmission2JudgeDto;
 import com.gusl.gojserver.account.infrastructure.security.LoginUser;
 import com.gusl.gojserver.contest.application.vo.ContestSubmissionDetailVo;
 import com.gusl.gojserver.contest.application.vo.ContestSubmissionListVo;
 import com.gusl.gojserver.submission.application.vo.SubmissionVo;
 
-public interface ContestSubmissionService extends IService<ContestSubmission> {
+public interface ContestSubmissionService extends IService<Submission> {
 
     /**
      * 提交代码

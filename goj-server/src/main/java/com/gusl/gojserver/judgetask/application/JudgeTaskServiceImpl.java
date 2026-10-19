@@ -9,15 +9,12 @@ import com.gusl.common.common.BaseException;
 import com.gusl.common.common.PageQuery;
 import com.gusl.common.common.PageResult;
 import com.gusl.common.constant.JudgeTaskStatus;
-import com.gusl.common.constant.JudgeTaskType;
 import com.gusl.common.constant.JudgingConstant;
 import com.gusl.common.constant.SystemConstant;
 import com.gusl.common.pojo.entity.*;
 import com.gusl.gojserver.contest.infrastructure.persistence.ContestMapper;
-import com.gusl.gojserver.contest.infrastructure.persistence.ContestSubmissionMapper;
 import com.gusl.gojserver.judgetask.infrastructure.persistence.JudgeTaskMapper;
 import com.gusl.gojserver.problem.infrastructure.persistence.ProblemMapper;
-import com.gusl.gojserver.problem.infrastructure.persistence.ProblemReviewSubmissionMapper;
 import com.gusl.gojserver.submission.infrastructure.persistence.SubmissionMapper;
 import com.gusl.gojserver.account.infrastructure.persistence.UserMapper;
 import com.gusl.gojserver.account.domain.model.User;
@@ -44,11 +41,6 @@ public class JudgeTaskServiceImpl
 
     private final SubmissionMapper submissionMapper;
 
-    private final ProblemReviewSubmissionMapper reviewSubmissionMapper;
-
-    private final ContestSubmissionMapper contestSubmissionMapper;
-
-    private final ProblemReviewSubmissionMapper problemReviewSubmissionMapper;
     private final UserMapper userMapper;
     private final ProblemMapper problemMapper;
     private final ContestMapper contestMapper;
@@ -125,7 +117,7 @@ public class JudgeTaskServiceImpl
         }
 
         // 恢复业务记录；SYSTEM_ERROR 不进入个人派生统计，因此无需执行统计回滚。
-        resetBusinessForRejudge(deadTask);
+        resetSubmissionForRejudge(deadTask.getBusinessId(), deadTask.getTaskVersion() + 1);
 
         JudgeTask newTask = JudgeTask.builder()
                 .taskType(deadTask.getTaskType())
@@ -144,29 +136,19 @@ public class JudgeTaskServiceImpl
     @Override
     public JudgeTaskDetailVo getJudgeTaskDetailById(Long taskId) {
         JudgeTask task = judgeTaskMapper.selectById(taskId);
+        if (task == null) {
+            throw new BaseException("任务不存在");
+        }
 
         JudgeTaskDetailVo vo = BeanUtil.copyProperties(task, JudgeTaskDetailVo.class);
 
-        Long userId;
-        Long problemId;
-        Long contestId = -1L;
-
-        if(JudgeTaskType.CONTEST_SUBMISSION.equals(task.getTaskType())){
-            ContestSubmission contestSubmission =
-                    contestSubmissionMapper.selectById(task.getBusinessId());
-            userId = contestSubmission.getUserId();
-            problemId = contestSubmission.getProblemId();
-            contestId = contestSubmission.getContestId();
-        }else if(JudgeTaskType.PROBLEM_REVIEW.equals(task.getTaskType())){
-            ProblemReviewSubmission problemReviewSubmission =
-                    problemReviewSubmissionMapper.selectById(task.getBusinessId());
-            userId = 1L;
-            problemId = problemReviewSubmission.getProblemId();
-        }else {
-            Submission submission = submissionMapper.selectById(task.getBusinessId());
-            userId = submission.getUserId();
-            problemId = submission.getProblemId();
+        Submission submission = submissionMapper.selectById(task.getBusinessId());
+        if (submission == null) {
+            throw new BaseException("提交不存在");
         }
+        Long userId = submission.getUserId();
+        Long problemId = submission.getProblemId();
+        Long contestId = submission.getContestId();
 
         User user = userMapper.selectById(userId);
         Problem problem = problemMapper.selectById(problemId);
@@ -177,7 +159,7 @@ public class JudgeTaskServiceImpl
         vo.setProblemId(problemId);
         vo.setProblemName(problem.getProblemName());
 
-        if(contestId != -1){
+        if(contestId != null){
             Contest contest = contestMapper.selectById(contestId);
             vo.setContestId(contestId);
             vo.setContestTitle(contest.getTitle());
@@ -187,26 +169,9 @@ public class JudgeTaskServiceImpl
     }
 
     /**
-     * 根据任务类型恢复对应业务记录为待测评状态。
+     * 恢复提交为待测评状态。
      */
-    private void resetBusinessForRejudge(JudgeTask deadTask) {
-        if (JudgeTaskType.SUBMISSION.equals(deadTask.getTaskType())) {
-            resetSubmissionForRejudge(deadTask.getBusinessId());
-            return;
-        }
-
-        if (JudgeTaskType.PROBLEM_REVIEW.equals(deadTask.getTaskType())) {
-            resetProblemReviewForRejudge(deadTask.getBusinessId());
-            return;
-        }
-
-        throw new BaseException("不支持重测的任务类型：" + deadTask.getTaskType());
-    }
-
-    /**
-     * 恢复普通提交为待测评状态。
-     */
-    private void resetSubmissionForRejudge(Long submissionId) {
+    private void resetSubmissionForRejudge(Long submissionId, Integer version) {
         Submission submission = submissionMapper.selectOne(
                 Wrappers.<Submission>lambdaQuery()
                         .eq(Submission::getId, submissionId)
@@ -214,7 +179,7 @@ public class JudgeTaskServiceImpl
         );
 
         if (submission == null) {
-            throw new BaseException("普通提交不存在：" + submissionId);
+            throw new BaseException("提交不存在：" + submissionId);
         }
 
         if (JudgingConstant.TERMINAL_STATUSES.contains(submission.getStatus())
@@ -225,7 +190,8 @@ public class JudgeTaskServiceImpl
         int affectedRows = submissionMapper.update(
                 Wrappers.<Submission>lambdaUpdate()
                         .set(Submission::getStatus, JudgingConstant.IN_QUEUE)
-                        .set(Submission::getScore, null)
+                        .set(Submission::getScore, 0)
+                        .set(Submission::getVersion, version)
                         .set(Submission::getTimeMs, null)
                         .set(Submission::getMemoryKb, null)
                         .set(Submission::getCompilerMsg, null)
@@ -236,44 +202,8 @@ public class JudgeTaskServiceImpl
         );
 
         if (affectedRows != 1) {
-            throw new BaseException("恢复普通提交状态失败：" + submissionId);
+            throw new BaseException("恢复提交状态失败：" + submissionId);
         }
     }
 
-    /**
-     * 恢复管理员验题提交。
-     */
-    private void resetProblemReviewForRejudge(Long reviewSubmissionId) {
-        ProblemReviewSubmission submission = reviewSubmissionMapper.selectOne(
-                Wrappers.<ProblemReviewSubmission>lambdaQuery()
-                        .eq(ProblemReviewSubmission::getId, reviewSubmissionId)
-                        .last("FOR UPDATE")
-        );
-
-        if (submission == null) {
-            throw new BaseException("管理员验题提交不存在：" + reviewSubmissionId);
-        }
-
-        if (JudgingConstant.TERMINAL_STATUSES.contains(submission.getStatus())
-                && !SystemConstant.SYSTEM_ERROR.equals(submission.getStatus())) {
-            throw new BaseException("该验题提交已经存在有效测评结果，不能按死亡任务重测：" + reviewSubmissionId);
-        }
-
-        int affectedRows = reviewSubmissionMapper.update(
-                Wrappers.<ProblemReviewSubmission>lambdaUpdate()
-                        .set(ProblemReviewSubmission::getStatus, JudgingConstant.IN_QUEUE)
-                        .set(ProblemReviewSubmission::getScore, null)
-                        .set(ProblemReviewSubmission::getTimeMs, null)
-                        .set(ProblemReviewSubmission::getMemoryKb, null)
-                        .set(ProblemReviewSubmission::getCompilerMsg, null)
-                        .set(ProblemReviewSubmission::getJudgeMsg, null)
-                        .set(ProblemReviewSubmission::getJudgeStartTime, null)
-                        .set(ProblemReviewSubmission::getJudgeEndTime, null)
-                        .eq(ProblemReviewSubmission::getId, reviewSubmissionId)
-        );
-
-        if (affectedRows != 1) {
-            throw new BaseException("恢复管理员验题提交状态失败：" + reviewSubmissionId);
-        }
-    }
 }
