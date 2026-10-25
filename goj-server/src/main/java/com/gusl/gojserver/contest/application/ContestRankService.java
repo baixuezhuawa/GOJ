@@ -18,9 +18,10 @@ import com.gusl.gojserver.submission.infrastructure.persistence.SubmissionMapper
 import com.gusl.gojserver.account.infrastructure.persistence.UserMapper;
 import com.gusl.gojserver.contest.application.model.ContestRankSnapshot;
 import com.gusl.gojserver.account.domain.model.User;
-import com.gusl.gojserver.contest.application.vo.ContestRankingRowVo;
+import com.gusl.gojserver.contest.application.model.UserRankRow;
+import com.gusl.gojserver.contest.domain.ranking.RankCalculator;
 import com.gusl.gojserver.contest.application.vo.ContestRankingVo;
-import com.gusl.gojserver.contest.application.vo.ProblemResults;
+import com.gusl.gojserver.contest.application.model.ProblemState;
 import com.gusl.gojserver.shared.application.pagination.PageFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -66,7 +67,7 @@ public class ContestRankService {
     @Value("${goj.contest.rank-cache.finish-ttl-seconds}")
     private Integer finishTtl;
 
-    private static final String RANK_SNAPSHOT_KEY_PREFIX = "contest:rank:snapshot:";
+    private static final String RANK_SNAPSHOT_KEY_PREFIX = "contest:rank:snapshot:v2:";
 
     /**
      * 获取比赛排行榜
@@ -90,7 +91,10 @@ public class ContestRankService {
 
         vo.setContestId(contestId);
         vo.setContestStatus(contest.getStatus());
+        vo.setContestProblems(contestProblemMapper.selectList(Wrappers.<ContestProblem>lambdaQuery()
+                .eq(ContestProblem::getContestId, contestId).orderByAsc(ContestProblem::getSortOrder)));
 
+        // 查询Redis, 获取榜快照
         ContestRankSnapshot snapshot = getContestSnapshot(contestId);
 
         // 如果不在缓存
@@ -127,19 +131,39 @@ public class ContestRankService {
         return value == null ? null : (ContestRankSnapshot)value;
     }
 
+    /**
+     * 榜单快照
+     * @param contestId 比赛id
+     * @param snapshot 快照
+     * @param ttl 时效/s
+     */
+    private void saveContestSnapshot(Long contestId, ContestRankSnapshot snapshot, Integer ttl){
+        redisTemplate.opsForValue().set(getSnapshotKey(contestId), snapshot, Duration.ofSeconds(ttl));
+    }
 
     /**
-     * 计算比赛榜单
+     * 获取比赛榜单缓存key
+     * @param contestId 比赛id
+     * @return 缓存key
+     */
+    private String getSnapshotKey(Long contestId){
+        return RANK_SNAPSHOT_KEY_PREFIX + contestId;
+    }
+
+
+    /**
+     * 基于数据库计算比赛榜单
      * @param contestId 比赛id
      * @param contest 比赛
      * @return 比赛榜单列表
      */
-    private List<ContestRankingRowVo> calContestRank(Long contestId, Contest contest) throws ExecutionException, InterruptedException {
+    private List<UserRankRow> calContestRank(Long contestId, Contest contest) throws ExecutionException, InterruptedException {
 
         // 获取全部参赛人员.
         List<ContestParticipate> participates = contestParticipateMapper.selectList(
                 Wrappers.<ContestParticipate>lambdaQuery()
                         .eq(ContestParticipate::getContestId, contestId)
+                        .eq(ContestParticipate::getParticipateType, com.gusl.common.constant.ParticipateType.REAL)
         );
 
         // 如果无人报名则直接返回空列表
@@ -178,7 +202,6 @@ public class ContestRankService {
                                 .lt(Submission::getSubmissionTime, contest.getEndTime())
                                 .orderByAsc(Submission::getUserId)
                                 .orderByAsc(Submission::getProblemId)
-                                .orderByAsc(Submission::getSubmissionTime)
                                 .orderByAsc(Submission::getId)
                 )
         );
@@ -189,15 +212,18 @@ public class ContestRankService {
 
         List<Submission> submissions = submissionSubmit.get();
 
+        Map<Long, Integer> id2Index = new HashMap<>();
+        contestProblems.forEach(p -> id2Index.put(p.getProblemId(), p.getSortOrder()));
+
 
         // 开始计算结果
-        List<CompletableFuture<ContestRankingRowVo>> futures = new ArrayList<>();
+        List<CompletableFuture<UserRankRow>> futures = new ArrayList<>();
 
         // 对于每个用户来说
         for(User user : users){
 
-            CompletableFuture<ContestRankingRowVo> completableFuture = CompletableFuture.supplyAsync(
-                    () -> calculateUserRowVo(user, submissions, contestProblems, contest),
+            CompletableFuture<UserRankRow> completableFuture = CompletableFuture.supplyAsync(
+                    () -> calculateUserRowVo(user, submissions, contestProblems, contest, id2Index),
                     contestRankExecutor
             );
 
@@ -206,7 +232,7 @@ public class ContestRankService {
 
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
-        List<ContestRankingRowVo> rows = new ArrayList<>();
+        List<UserRankRow> rows = new ArrayList<>();
 
         futures.forEach(e -> rows.add(e.join()));
 
@@ -215,15 +241,24 @@ public class ContestRankService {
         return rows;
     }
 
-    private ContestRankingRowVo calculateUserRowVo(
+    /**
+     * 基于二分计算单个用户
+     * @param user 用户
+     * @param submissions 提交集合
+     * @param contestProblems 比赛问题集合
+     * @param contest 比赛实体
+     * @return 单个用户比赛状态
+     */
+    private UserRankRow calculateUserRowVo(
             User user,
             List<Submission> submissions,
             List<ContestProblem> contestProblems,
-            Contest contest
+            Contest contest,
+            Map<Long, Integer> id2Index
     ){
         Long userId = user.getId();
 
-        ContestRankingRowVo rowVo = new ContestRankingRowVo();
+        UserRankRow rowVo = new UserRankRow();
         rowVo.setUserId(userId);
         rowVo.setUsername(user.getUsername());
 
@@ -240,7 +275,7 @@ public class ContestRankService {
             }
         }
 
-        List<ProblemResults> problemResultsList = new ArrayList<>();
+        List<ProblemState> problemResultsList = new ArrayList<>(Collections.nCopies(contestProblems.size(), null));
 
         int p = l;
         int solve = 0;
@@ -249,13 +284,7 @@ public class ContestRankService {
         // 比赛问题已经根据问题id进行排序.
         for(ContestProblem cs : contestProblems){
 
-            ProblemResults problemResults = ProblemResults.builder()
-                    .wrongAttempts(0)
-                    .accepted(false)
-                    .displayCode(cs.getDisplayCode())
-                    .acceptedMinute(-1) // 没通过, 默认时间使用 -1
-                    .sortOrder(cs.getSortOrder())
-                    .build();
+            ProblemState problemResults = new ProblemState(0, false, -1);
 
             // 移动到指定区间
             while(
@@ -274,74 +303,30 @@ public class ContestRankService {
             ){
                 Submission submission = submissions.get(p++);
 
-                if (problemResults.isAccepted()){
-                    continue;
-                }
-
-                if(JudgingConstant.ACCEPTED.equals(submission.getStatus())){
-                    int minute = (int)Duration.between(contest.getStartTime(), submission.getSubmissionTime()).toMinutes();
-                    problemResults.setAcceptedMinute(minute);
-                    problemResults.setAccepted(true);
-                    penalty += problemResults.getWrongAttempts() * 20 + minute;
-                    solve++;
-                }
-
-                if(isPenaltyStatus(submission.getStatus())){
-                    problemResults.setWrongAttempts(problemResults.getWrongAttempts() + 1);
-                }
+                int minute = (int) Duration.between(contest.getStartTime(), submission.getSubmissionTime()).toMinutes();
+                ProblemState updated = RankCalculator.applyOrderedResult(problemResults, submission.getStatus(), minute);
+                solve += (updated.isAccepted() ? 1 : 0) - (problemResults.isAccepted() ? 1 : 0);
+                penalty += RankCalculator.penalty(updated) - RankCalculator.penalty(problemResults);
+                problemResults = updated;
             }
 
-            problemResultsList.add(problemResults);
+            problemResultsList.set(id2Index.get(cs.getProblemId()), problemResults);
         }
 
-        // 再根据问题定义的顺序进行排序.
-        problemResultsList.sort((a, b) -> a.getSortOrder() - b.getSortOrder());
-
-        rowVo.setProblemResults(problemResultsList);
-        rowVo.setSolveCount(solve);
-        rowVo.setPenaltyMinutes(penalty);
+        rowVo.setStates(problemResultsList);
+        rowVo.setAcceptedCount(solve);
+        rowVo.setPenalty(penalty);
 
         return rowVo;
     }
-
 
 
     /**
      * 排序, 计算排名
      * @param list 用户比赛提交信息列表
      */
-    private void sortRowByRank(List<ContestRankingRowVo> list){
-        // 排序
-        list.sort((a, b) -> {
-            if (!a.getSolveCount().equals(b.getSolveCount())) {
-                return b.getSolveCount() - a.getSolveCount();
-            }
-            return a.getPenaltyMinutes() - b.getPenaltyMinutes();
-        });
-
-
-        for(int i = 0, rank = 0; i < list.size(); i++){
-            if(
-                    i == 0 || !(
-                            list.get(i - 1).getPenaltyMinutes().equals(list.get(i).getPenaltyMinutes()) &&
-                                    list.get(i - 1).getSolveCount().equals(list.get(i).getSolveCount())
-                    )
-
-            ){
-                rank = i + 1;
-            }
-            list.get(i).setRank(rank);
-        }
-    }
-
-    /**
-     * 榜单快照
-     * @param contestId 比赛id
-     * @param snapshot 快照
-     * @param ttl 时效/s
-     */
-    private void saveContestSnapshot(Long contestId, ContestRankSnapshot snapshot, Integer ttl){
-        redisTemplate.opsForValue().set(getSnapshotKey(contestId), snapshot, Duration.ofSeconds(ttl));
+    private void sortRowByRank(List<UserRankRow> list){
+        RankCalculator.sortAndRank(list);
     }
 
 
@@ -364,15 +349,6 @@ public class ContestRankService {
     }
 
 
-    /**
-     * 获取比赛榜单缓存key
-     * @param contestId 比赛id
-     * @return 缓存key
-     */
-    private String getSnapshotKey(Long contestId){
-        return RANK_SNAPSHOT_KEY_PREFIX + contestId;
-    }
-
 
     /**
      * 转化为分页对象
@@ -380,9 +356,9 @@ public class ContestRankService {
      * @param vos 原始榜单数据
      * @return 榜单分院数据
      */
-    private IPage<ContestRankingRowVo> getRakingRowPage(PageQuery pageQuery, List<ContestRankingRowVo> vos){
+    private IPage<UserRankRow> getRakingRowPage(PageQuery pageQuery, List<UserRankRow> vos){
 
-        IPage<ContestRankingRowVo> page = pageFactory.create(pageQuery);
+        IPage<UserRankRow> page = pageFactory.create(pageQuery);
 
         long total = vos.size();
         long offset = (page.getCurrent() - 1) * page.getSize();
@@ -399,15 +375,4 @@ public class ContestRankService {
     }
 
 
-    /**
-     * 判断是否为终态
-     * @param status 当前状态
-     */
-    private boolean isPenaltyStatus(String status) {
-        return JudgingConstant.WRONG_ANSWER.equals(status)
-                || JudgingConstant.COMPILE_ERROR.equals(status)
-                || JudgingConstant.TIME_LIMIT_EXCEEDED.equals(status)
-                || JudgingConstant.MEMORY_LIMIT_EXCEEDED.equals(status)
-                || JudgingConstant.RUNTIME_ERROR.equals(status);
-    }
 }

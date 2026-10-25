@@ -11,7 +11,8 @@ import com.gusl.gojjudge.judging.mapper.SubmissionMapper;
 import com.gusl.gojjudge.judging.model.JudgeOutcome;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
+import com.gusl.common.pojo.entity.ContestJudgeResultMessage;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -28,6 +29,8 @@ public class SubmissionResultService {
 
     /** 所有更新器 */
     private final List<SubmissionFinalizedUpdater> submissionFinalizedUpdaters;
+
+    private final ApplicationEventPublisher events;
 
 
     /**
@@ -61,6 +64,14 @@ public class SubmissionResultService {
             return current != null && JudgingConstant.TERMINAL_STATUSES.contains(current.getStatus());
         }
         if (!terminal) {
+            return true;
+        }
+
+        // 比赛仅发布当前提交的终态事件，发送器等待事务提交后通知 Server。
+        if (SubmissionType.CONTEST.equals(submission.getSubmissionType())) {
+            ContestJudgeResultMessage result = ContestJudgeResultMessage.from(submission);
+            result.setStatus(outcome.getCurStatus());
+            events.publishEvent(result);
             return true;
         }
 

@@ -9,14 +9,12 @@ import com.gusl.gojserver.account.infrastructure.security.LoginUser;
 import com.gusl.gojserver.contest.application.vo.ContestDetailVo;
 import com.gusl.gojserver.contest.application.vo.ContestListVo;
 import com.gusl.gojserver.contest.application.vo.ContestProblemDetailVo;
-import com.gusl.gojserver.contest.application.vo.ContestRankingVo;
 import com.gusl.gojserver.contest.application.vo.ContestSubmissionDetailVo;
 import com.gusl.gojserver.contest.application.vo.ContestSubmissionListVo;
 import com.gusl.gojserver.submission.application.vo.SubmissionVo;
 import com.gusl.gojserver.contest.application.ContestParticipateService;
 import com.gusl.gojserver.contest.application.ContestService;
 import com.gusl.gojserver.contest.application.ContestSubmissionService;
-import com.gusl.gojserver.contest.application.ContestRankService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -41,7 +39,7 @@ public class ContestController extends BaseController {
 
     private final ContestSubmissionService contestSubmissionService;
 
-    private final ContestRankService contestRankService;
+
 
 
 
@@ -159,12 +157,5 @@ public class ContestController extends BaseController {
         return success("操作成功", vo);
     }
 
-
-    @Operation(summary = "获取比赛排行榜")
-    @GetMapping("/{contestId}/ranking")
-    public Result getContestRank(@PathVariable Long contestId, @ModelAttribute PageQuery pageQuery){
-        ContestRankingVo vo = contestRankService.getContestRank(contestId, pageQuery);
-        return success("操作成功", vo);
-    }
 
 }

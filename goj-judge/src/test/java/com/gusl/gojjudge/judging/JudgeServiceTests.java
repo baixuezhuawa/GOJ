@@ -10,7 +10,6 @@ import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.mockito.ArgumentCaptor;
 import com.gusl.common.constant.ProblemStatus;
 import com.gusl.common.constant.ProblemType;
-import com.gusl.gojjudge.judging.engine.JudgeRequestConfigurer;
 import com.gusl.gojjudge.judging.mapper.ProblemCheckerMapper;
 import com.gusl.common.pojo.entity.JudgeTaskMessage;
 import com.gusl.common.pojo.entity.Problem;
@@ -65,7 +64,7 @@ class JudgeServiceTests {
             return null;
         }).when(engine).judge(any());
         JudgeServiceImpl service = new JudgeServiceImpl(submissions, results, problems, datasets,
-                mock(ContestProblemMapper.class), new JudgeRequestConfigurer(mock(ProblemCheckerMapper.class)), engine);
+                mock(ContestProblemMapper.class), mock(ProblemCheckerMapper.class), engine);
         JudgeTaskMessage message = new JudgeTaskMessage();
         message.setBusinessId(1L);
         message.setTaskType(JudgeTaskType.PROBLEM_REVIEW);

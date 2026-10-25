@@ -1,6 +1,5 @@
 package com.gusl.gojserver.contest.application.model;
 
-import com.gusl.gojserver.contest.application.vo.ContestRankingRowVo;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -15,7 +14,7 @@ public class ContestRankSnapshot {
 
     private Long contestId;
 
-    private List<ContestRankingRowVo> rows;
+    private List<UserRankRow> rows;
 
     private LocalDateTime generatedAt;
 }

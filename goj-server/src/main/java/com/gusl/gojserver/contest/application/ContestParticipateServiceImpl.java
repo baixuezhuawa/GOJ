@@ -11,6 +11,7 @@ import com.gusl.gojserver.contest.infrastructure.persistence.ContestMapper;
 import com.gusl.gojserver.contest.infrastructure.persistence.ContestParticipateMapper;
 import com.gusl.gojserver.account.infrastructure.security.LoginUser;
 import lombok.RequiredArgsConstructor;
+import com.gusl.gojserver.contest.application.ranking.RankingManager;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +24,8 @@ public class ContestParticipateServiceImpl extends ServiceImpl<ContestParticipat
     private final ContestParticipateMapper participateMapper;
 
     private final ContestMapper contestMapper;
+
+    private final RankingManager rankingManager;
 
     /**
      * 报名比赛
@@ -44,16 +47,16 @@ public class ContestParticipateServiceImpl extends ServiceImpl<ContestParticipat
         // 判断是否在报名时间
         if(
                 contest.getRegisterStartTime().isAfter(now) ||
-                contest.getRegisterEndTime().isBefore(now)
+                !now.isBefore(contest.getEndTime())
         ){
             throw new BaseException(
                     "不在合法报名时间" +
                     contest.getRegisterStartTime() + " ~ " +
-                    contest.getRegisterEndTime()
+                    contest.getEndTime()
             );
         }
 
-        // 报名, 但是有可能重复报名, 通过
+        // 报名, 但是有可能重复报名
         ContestParticipate participate = new ContestParticipate();
         participate.setContestId(contestId);
         participate.setUserId(loginUser.getUserId());
@@ -61,11 +64,12 @@ public class ContestParticipateServiceImpl extends ServiceImpl<ContestParticipat
         participate.setParticipateType(ParticipateType.REAL);
 
         try {
-            // 有可能重复报名
+            // 有联合索引(user_id, 参数类型, contest_id), 防止重复报名.
             participateMapper.insert(participate);
         } catch (DuplicateKeyException e) {
            throw new BaseException("你已重复报名该比赛");
         }
+        rankingManager.addParticipant(contestId, loginUser.getUserId(), loginUser.getUsername());
     }
 
     /**
@@ -80,6 +84,11 @@ public class ContestParticipateServiceImpl extends ServiceImpl<ContestParticipat
 
         LocalDateTime now = LocalDateTime.now();
 
+        // 比赛开始后不能取消报名，不依赖定时任务是否已更新比赛状态。
+        if (!now.isBefore(contest.getStartTime())) {
+            throw new BaseException("比赛已开始，不能取消报名");
+        }
+
         // 判断是否在报名时间
         if(
                 contest.getRegisterStartTime().isAfter(now) ||
@@ -92,6 +101,7 @@ public class ContestParticipateServiceImpl extends ServiceImpl<ContestParticipat
             );
         }
 
+        // 取消报名
         int delete = participateMapper.delete(
                 Wrappers.<ContestParticipate>lambdaQuery()
                         .eq(ContestParticipate::getContestId, contestId)
@@ -102,5 +112,6 @@ public class ContestParticipateServiceImpl extends ServiceImpl<ContestParticipat
         if (delete != 1){
             throw new BaseException("未报名");
         }
+        rankingManager.removeParticipant(contestId, loginUser.getUserId());
     }
 }

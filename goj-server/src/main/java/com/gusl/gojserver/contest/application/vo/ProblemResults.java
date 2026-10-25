@@ -16,12 +16,6 @@ import org.springframework.stereotype.Service;
 @Builder
 public class ProblemResults {
 
-    @Schema(description = "问题展示名称")
-    private String displayCode;
-
-    @Schema(description = "排序顺序")
-    private Integer sortOrder;
-
     @Schema(description = "是否通过")
     private boolean accepted;
 

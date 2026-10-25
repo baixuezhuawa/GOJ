@@ -23,6 +23,9 @@ public class ContestStatus {
     /** 系统测试/回滚 */
     public static final String SYSTEM_TESTING = "SYSTEM_TESTING";
 
+    /** 同步比赛历史提交并生成排行榜快照 */
+    public static final String SYNC = "SYNC";
+
     /** 彻底结束 */
     public static final String FINISH = "FINISH";
 }

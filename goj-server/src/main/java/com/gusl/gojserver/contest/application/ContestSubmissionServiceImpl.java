@@ -74,6 +74,25 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<SubmissionMapper, 
             ContestSubmission2JudgeDto dto,
             LoginUser loginUser
     ) {
+        // 正式提交与阶段切换共用比赛行锁，确保 WAITING 不会漏掉尚未提交的入队事务。
+        Contest currentContest = contestMapper.selectOne(
+                Wrappers.<Contest>lambdaQuery()
+                        .eq(Contest::getId, contestId)
+                        .last("FOR UPDATE")
+        );
+        if (currentContest == null) {
+            throw new BaseException("该比赛不存在");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (
+                !ContestStatus.FINISH.equals(currentContest.getStatus())
+                && (!ContestStatus.RUNNING.equals(currentContest.getStatus())
+                || now.isBefore(currentContest.getStartTime())
+                || !now.isBefore(currentContest.getEndTime()))
+        ) {
+            throw new BaseException("当前阶段不允许提交比赛题目");
+        }
+
         // 判断用户是否报名
         Long isParticipate = contestParticipateMapper.selectCount(
                 Wrappers.<ContestParticipate>lambdaQuery()

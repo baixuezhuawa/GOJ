@@ -33,6 +33,11 @@ goj:
         display-name: Python 3
 
   contest:
+    ranking:
+      enabled: true # 单实例 Server 接收比赛结果
+      result-topic: GOJ_CONTEST_RESULT
+      consumer-group: goj-contest-ranking-server
+      prewarm-seconds: 60 # 开赛前初始化内存榜
     rank-cache:
       running-ttl-seconds: 3
       waiting-ttl-seconds: 3

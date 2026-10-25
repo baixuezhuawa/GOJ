@@ -24,7 +24,8 @@ import static org.mockito.Mockito.*;
 class SubmissionResultTests {
     private final SubmissionMapper submissions = mock(SubmissionMapper.class);
     private final SubmissionFinalizedUpdater updater = mock(SubmissionFinalizedUpdater.class);
-    private final SubmissionResultService service = new SubmissionResultService(submissions, List.of(updater));
+    private final org.springframework.context.ApplicationEventPublisher events = mock(org.springframework.context.ApplicationEventPublisher.class);
+    private final SubmissionResultService service = new SubmissionResultService(submissions, List.of(updater), events);
     private final Submission submission = new Submission();
     private final JudgeOutcome outcome = new JudgeOutcome();
 
@@ -79,5 +80,36 @@ class SubmissionResultTests {
     void statisticFailurePropagatesToCaller() {
         doThrow(new IllegalStateException("统计写入失败")).when(updater).update(any());
         assertThrows(IllegalStateException.class, () -> service.updateSubmission(submission, outcome));
+    }
+
+    /** 消息包含当前提交全部计分字段，仅成功写回的终态发布一次。 */
+    @Test
+    void contestPublishesOnlySuccessfulTerminalWithSevenFields() {
+        submission.setSubmissionType(SubmissionType.CONTEST);
+        submission.setContestId(7L);
+        submission.setProblemId(8L);
+        submission.setUserId(9L);
+        submission.setVersion(2);
+        submission.setSubmissionTime(java.time.LocalDateTime.of(2026, 10, 21, 10, 5));
+        outcome.setCurStatus(JudgingConstant.RUNNING);
+        service.updateSubmission(submission, outcome);
+        verifyNoInteractions(events);
+        outcome.setCurStatus(JudgingConstant.ACCEPTED);
+        service.updateSubmission(submission, outcome);
+        when(submissions.update(any())).thenReturn(0);
+        submission.setStatus(JudgingConstant.ACCEPTED);
+        when(submissions.selectById(1L)).thenReturn(submission);
+        service.updateSubmission(submission, outcome);
+        org.mockito.ArgumentCaptor<com.gusl.common.pojo.entity.ContestJudgeResultMessage> capture =
+                org.mockito.ArgumentCaptor.forClass(com.gusl.common.pojo.entity.ContestJudgeResultMessage.class);
+        verify(events).publishEvent(capture.capture());
+        assertEquals(7L, capture.getValue().getContestId());
+        assertEquals(8L, capture.getValue().getProblemId());
+        assertEquals(9L, capture.getValue().getUserId());
+        assertEquals(1L, capture.getValue().getSubmissionId());
+        assertEquals(2, capture.getValue().getVersion());
+        assertEquals(JudgingConstant.ACCEPTED, capture.getValue().getStatus());
+        assertEquals(submission.getSubmissionTime(), capture.getValue().getSubmissionTime());
+        verifyNoInteractions(updater);
     }
 }
