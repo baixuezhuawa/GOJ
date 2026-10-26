@@ -11,6 +11,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class Submission2JudgeDto {
 
+    @Schema(description = "本次逻辑提交的 UUID，重试时保持不变")
+    private String requestId;
+
     @Schema(description = "题目id", example = "1")
     private Long problemId;
 

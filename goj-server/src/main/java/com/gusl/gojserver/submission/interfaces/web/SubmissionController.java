@@ -8,6 +8,8 @@ import com.gusl.gojserver.submission.application.vo.SubmissionDetailVo;
 import com.gusl.gojserver.submission.application.vo.SubmissionListVo;
 import com.gusl.gojserver.submission.application.vo.SubmissionVo;
 import com.gusl.gojserver.submission.application.SubmissionService;
+import com.gusl.gojserver.submission.application.SubmissionIdempotencyService;
+import com.gusl.gojserver.submission.application.model.SubmissionRequestIdentity;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -24,13 +26,16 @@ import java.util.List;
 public class SubmissionController extends BaseController {
 
     private final SubmissionService submissionService;
+    private final SubmissionIdempotencyService submissionIdempotencyService;
 
 
     @PreAuthorize("isAuthenticated()")
     @Operation(summary = "万恶源头")
     @PostMapping("/submit")
     public Result submission(@RequestBody Submission2JudgeDto submission2JudgeDto, @AuthenticationPrincipal LoginUser loginUser) {
-        SubmissionVo submissionVo = submissionService.submitProblemToJudge(submission2JudgeDto, loginUser);
+        SubmissionRequestIdentity identity = SubmissionRequestIdentity.regular(submission2JudgeDto);
+        SubmissionVo submissionVo = submissionIdempotencyService.execute(loginUser.getUserId(), identity,
+                () -> submissionService.submitProblemToJudge(submission2JudgeDto, loginUser, identity));
         return success("你肯定会AC的, 直接看下一题吧! 哈哈哈", submissionVo);
     }
 

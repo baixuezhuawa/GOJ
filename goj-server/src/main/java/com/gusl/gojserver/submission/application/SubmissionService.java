@@ -9,6 +9,7 @@ import com.gusl.common.pojo.entity.Submission;
 import com.gusl.gojserver.submission.application.vo.SubmissionDetailVo;
 import com.gusl.gojserver.submission.application.vo.SubmissionListVo;
 import com.gusl.gojserver.submission.application.vo.SubmissionVo;
+import com.gusl.gojserver.submission.application.model.SubmissionRequestIdentity;
 
 public interface SubmissionService extends IService<Submission> {
 
@@ -16,7 +17,11 @@ public interface SubmissionService extends IService<Submission> {
      * 将用户的提交, 提交到测评机
      * @param submission2JudgeDto 提交信息
      */
-    SubmissionVo submitProblemToJudge(Submission2JudgeDto submission2JudgeDto, LoginUser loginUser);
+    SubmissionVo submitProblemToJudge(
+            Submission2JudgeDto submission2JudgeDto,
+            LoginUser loginUser,
+            SubmissionRequestIdentity identity
+    );
 
     /**
      * 获取测评详细信息

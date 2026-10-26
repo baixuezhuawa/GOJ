@@ -9,6 +9,7 @@ HELP.md
 goj-web/node_modules/
 goj-web/dist/
 goj-web/.vite/
+goj-web/test-results/
 
 .agents/**
 /docs/wayfinder/cache.md

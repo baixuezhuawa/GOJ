@@ -33,6 +33,12 @@ public class Submission extends BaseEntity {
     @Schema(description = "用户 id")
     private Long userId;
 
+    /** 一次逻辑提交的 UUID，历史和内部提交允许为空。 */
+    private String requestId;
+
+    /** 原始入口和提交内容的指纹，用于拒绝 UUID 被不同内容复用。 */
+    private String requestSha256;
+
     /** 题目 id。 */
     @Schema(description = "题目 id")
     private Long problemId;

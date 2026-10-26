@@ -10,6 +10,7 @@ import com.gusl.gojserver.account.infrastructure.security.LoginUser;
 import com.gusl.gojserver.contest.application.vo.ContestSubmissionDetailVo;
 import com.gusl.gojserver.contest.application.vo.ContestSubmissionListVo;
 import com.gusl.gojserver.submission.application.vo.SubmissionVo;
+import com.gusl.gojserver.submission.application.model.SubmissionRequestIdentity;
 
 public interface ContestSubmissionService extends IService<Submission> {
 
@@ -20,7 +21,8 @@ public interface ContestSubmissionService extends IService<Submission> {
             Long contestId,
             String problemCode,
             ContestSubmission2JudgeDto submission,
-            LoginUser loginUser
+            LoginUser loginUser,
+            SubmissionRequestIdentity identity
     );
 
     /**

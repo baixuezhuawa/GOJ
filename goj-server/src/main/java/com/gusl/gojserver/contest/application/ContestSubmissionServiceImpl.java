@@ -24,6 +24,7 @@ import com.gusl.gojserver.contest.application.vo.ContestSubmissionDetailVo;
 import com.gusl.gojserver.contest.application.vo.ContestSubmissionListVo;
 import com.gusl.gojserver.submission.application.vo.SubmissionVo;
 import com.gusl.gojserver.submission.application.SubmissionService;
+import com.gusl.gojserver.submission.application.model.SubmissionRequestIdentity;
 import com.gusl.gojserver.judgetask.application.support.JudgeSourceValidator;
 import com.gusl.gojserver.shared.application.pagination.PageFactory;
 import lombok.RequiredArgsConstructor;
@@ -72,7 +73,8 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<SubmissionMapper, 
             Long contestId,
             String problemCode,
             ContestSubmission2JudgeDto dto,
-            LoginUser loginUser
+            LoginUser loginUser,
+            SubmissionRequestIdentity identity
     ) {
         // 正式提交与阶段切换共用比赛行锁，确保 WAITING 不会漏掉尚未提交的入队事务。
         Contest currentContest = contestMapper.selectOne(
@@ -115,7 +117,7 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<SubmissionMapper, 
         // 如果为 null 说明比赛结束或者题目已经公开, 那就走正常提交逻辑
         if (contestProblem == null){
             log.info("题目不存在或者非比赛状态");
-            return tryToRegularSubmission(contestId, problemCode, dto, loginUser);
+            return tryToRegularSubmission(contestId, problemCode, dto, loginUser, identity);
         }
 
         // 如果不为null, 说明比赛还未结束, 那就还是比赛提交
@@ -139,7 +141,8 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<SubmissionMapper, 
                         contestProblem.getProblemId(),
                         loginUser.getUserId(),
                         dto,
-                        sha256
+                        sha256,
+                        identity
                 )
         );
     }
@@ -239,7 +242,8 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<SubmissionMapper, 
             Long contestId,
             String problemCode,
             ContestSubmission2JudgeDto dto,
-            LoginUser loginUser
+            LoginUser loginUser,
+            SubmissionRequestIdentity identity
     ){
         ContestProblem contestProblem = contestProblemMapper.selectOne(
                 Wrappers.<ContestProblem>lambdaQuery()
@@ -253,12 +257,14 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<SubmissionMapper, 
 
         return submissionService.submitProblemToJudge(
                 new Submission2JudgeDto(
+                        dto.getRequestId(),
                         contestProblem.getProblemId(),
                         dto.getLanguage(),
                         dto.getSourceCode(),
                         contestId
                 ),
-                loginUser
+                loginUser,
+                identity
         );
     }
 
@@ -269,7 +275,8 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<SubmissionMapper, 
             Long problemId,
             Long userId,
             ContestSubmission2JudgeDto dto,
-            String sha256
+            String sha256,
+            SubmissionRequestIdentity identity
     ){
         // 保存 submission 到数据库
         Submission submission = new Submission();
@@ -280,6 +287,8 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<SubmissionMapper, 
         submission.setProblemId(problemId);
         submission.setSubmissionTime(LocalDateTime.now());
         submission.setSourceSha256(sha256);
+        submission.setRequestId(identity.getRequestId());
+        submission.setRequestSha256(identity.getRequestSha256());
         submission.setSourceCode(dto.getSourceCode());
         submission.setLanguage(dto.getLanguage());
         submission.setVersion(1);

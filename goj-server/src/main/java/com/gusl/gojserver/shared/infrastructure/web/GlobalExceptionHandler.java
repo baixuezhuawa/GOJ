@@ -3,6 +3,7 @@ package com.gusl.gojserver.shared.infrastructure.web;
 
 import com.gusl.common.common.BaseException;
 import com.gusl.common.common.Result;
+import com.gusl.gojserver.submission.application.model.SubmissionRequestException;
 import com.gusl.common.constant.HttpStatus;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.dao.DuplicateKeyException;
@@ -20,6 +21,13 @@ import org.springframework.security.core.AuthenticationException;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    /** 提交入口显式区分内容冲突与明确业务拒绝，其他错误仍保持原有语义。 */
+    @ExceptionHandler(SubmissionRequestException.class)
+    public ResponseEntity<Result> handleSubmissionRequestException(SubmissionRequestException exception) {
+        return ResponseEntity.status(exception.getStatus())
+                .body(new Result(exception.getStatus(), exception.getMessage(), null));
+    }
 
     /**
      * 权限不足

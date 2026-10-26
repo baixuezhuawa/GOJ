@@ -60,7 +60,14 @@ export interface ProblemDetail {
 }
 
 export interface SubmissionRequest {
+  requestId: string;
   problemId: number;
+  language: string;
+  sourceCode: string;
+}
+
+export interface ContestSubmissionRequest {
+  requestId: string;
   language: string;
   sourceCode: string;
 }

@@ -23,6 +23,7 @@ import com.gusl.gojserver.account.infrastructure.security.LoginUser;
 import com.gusl.gojserver.submission.application.vo.SubmissionDetailVo;
 import com.gusl.gojserver.submission.application.vo.SubmissionListVo;
 import com.gusl.gojserver.submission.application.vo.SubmissionVo;
+import com.gusl.gojserver.submission.application.model.SubmissionRequestIdentity;
 import com.gusl.gojserver.judgetask.application.support.JudgeSourceValidator;
 import com.gusl.gojserver.shared.application.pagination.PageFactory;
 import lombok.RequiredArgsConstructor;
@@ -64,7 +65,11 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
      */
     @Transactional(rollbackFor = Exception.class)
     @Override
-    public SubmissionVo submitProblemToJudge(Submission2JudgeDto submission2JudgeDto, LoginUser loginUser) {
+    public SubmissionVo submitProblemToJudge(
+            Submission2JudgeDto submission2JudgeDto,
+            LoginUser loginUser,
+            SubmissionRequestIdentity identity
+    ) {
         // 校验提交是否合法
         requirePublishedProblem(submission2JudgeDto.getProblemId());
         requirePublishedTestData(submission2JudgeDto.getProblemId());
@@ -77,7 +82,7 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
         // 推送提交到测评机
         return new SubmissionVo(
             SubmissionType.REGULAR,
-            enqueueSubmission(submission2JudgeDto, loginUser.getUserId(), sha256)
+            enqueueSubmission(submission2JudgeDto, loginUser.getUserId(), sha256, identity)
         );
     }
 
@@ -88,7 +93,8 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
     private Long enqueueSubmission(
             Submission2JudgeDto submission2JudgeDto,
             Long userId,
-            String sha256
+            String sha256,
+            SubmissionRequestIdentity identity
     ) {
 
         // 保存 submission 到数据库
@@ -100,6 +106,8 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
         submission.setUserId(userId);
         submission.setSubmissionTime(LocalDateTime.now());
         submission.setSourceSha256(sha256);
+        submission.setRequestId(identity.getRequestId());
+        submission.setRequestSha256(identity.getRequestSha256());
         submissionMapper.insert(submission);
 
         log.info("提交用户id:{} 测评问题id:{} 测评id:{} ----- 开始测评",

@@ -1,5 +1,8 @@
 package com.gusl.gojserver.contest.interfaces.web;
 
+import com.gusl.gojserver.submission.application.SubmissionIdempotencyService;
+import com.gusl.gojserver.submission.application.model.SubmissionRequestIdentity;
+
 import com.gusl.common.common.BaseController;
 import com.gusl.common.common.PageQuery;
 import com.gusl.common.common.PageResult;
@@ -38,6 +41,7 @@ public class ContestController extends BaseController {
     private final ContestParticipateService contestParticipateService;
 
     private final ContestSubmissionService contestSubmissionService;
+    private final SubmissionIdempotencyService submissionIdempotencyService;
 
 
 
@@ -121,12 +125,15 @@ public class ContestController extends BaseController {
             @Valid  @RequestBody ContestSubmission2JudgeDto submission,
             @AuthenticationPrincipal LoginUser loginUser
     ){
-        SubmissionVo vo = contestSubmissionService.submitContestProblemToJudge(
+        SubmissionRequestIdentity identity = SubmissionRequestIdentity.contest(contestId, problemCode, submission);
+        SubmissionVo vo = submissionIdempotencyService.execute(loginUser.getUserId(), identity,
+                () -> contestSubmissionService.submitContestProblemToJudge(
                 contestId,
                 problemCode,
                 submission,
-                loginUser
-        );
+                loginUser,
+                identity
+        ));
         return success("提交成功", vo);
     }
 
