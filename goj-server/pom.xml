@@ -16,6 +16,18 @@
 
     <dependencies>
 
+        <!-- 与本机 Canal 1.1.7 对齐的 TCP 消费客户端 -->
+        <dependency>
+            <groupId>com.alibaba.otter</groupId>
+            <artifactId>canal.client</artifactId>
+            <version>1.1.7</version>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba.otter</groupId>
+            <artifactId>canal.protocol</artifactId>
+            <version>1.1.7</version>
+        </dependency>
+
         <!-- spring aop -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

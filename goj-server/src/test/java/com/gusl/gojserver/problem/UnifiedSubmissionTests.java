@@ -82,7 +82,7 @@ class UnifiedSubmissionTests {
     @Test
     void regularDetailRejectsContestAndReviewRecords() {
         SubmissionServiceImpl regular = new SubmissionServiceImpl(submissions, mock(UserMapper.class),
-                problems, datasets, tasks, validator, mock(SysProperties.class), mock(PageFactory.class));
+                problems, datasets, tasks, validator, mock(SysProperties.class), mock(PageFactory.class), mock(com.gusl.gojserver.submission.application.SubmissionStatusService.class));
         ReflectionTestUtils.setField(regular, "baseMapper", submissions);
         Submission submission = new Submission();
         submission.setId(42L);

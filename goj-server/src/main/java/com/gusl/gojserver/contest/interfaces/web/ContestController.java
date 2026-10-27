@@ -164,5 +164,13 @@ public class ContestController extends BaseController {
         return success("操作成功", vo);
     }
 
+    /** 获取比赛判题摘要，保持登录及比赛归属检查。 */
+    @PreAuthorize("isAuthenticated()")
+    @GetMapping("/{contestId}/submission/{submissionId}/status")
+    public Result getContestSubmissionStatus(@PathVariable Long contestId, @PathVariable Long submissionId,
+            @AuthenticationPrincipal LoginUser loginUser) {
+        return success("操作成功", contestSubmissionService.getContestSubmissionStatus(contestId, submissionId, loginUser));
+    }
+
 
 }

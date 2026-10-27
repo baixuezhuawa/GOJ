@@ -24,6 +24,10 @@ import com.gusl.gojserver.contest.application.vo.ContestSubmissionDetailVo;
 import com.gusl.gojserver.contest.application.vo.ContestSubmissionListVo;
 import com.gusl.gojserver.submission.application.vo.SubmissionVo;
 import com.gusl.gojserver.submission.application.SubmissionService;
+import com.gusl.gojserver.submission.application.SubmissionStatusService;
+import com.gusl.gojserver.submission.application.vo.SubmissionStatusVo;
+import com.gusl.gojserver.account.infrastructure.persistence.UserMapper;
+import com.gusl.gojserver.account.domain.model.User;
 import com.gusl.gojserver.submission.application.model.SubmissionRequestIdentity;
 import com.gusl.gojserver.judgetask.application.support.JudgeSourceValidator;
 import com.gusl.gojserver.shared.application.pagination.PageFactory;
@@ -58,6 +62,8 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<SubmissionMapper, 
 
     private final PageFactory pageFactory;
     private final ContestMapper contestMapper;
+    private final SubmissionStatusService submissionStatusService;
+    private final UserMapper userMapper;
 
     @Value("${goj.judge.task.max-attempts}")
     private Integer maxAttempts;
@@ -206,19 +212,22 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<SubmissionMapper, 
             throw new BaseException("该提交不存在");
         }
 
-        Contest contest = contestMapper.selectOne(
-                Wrappers.<Contest> lambdaQuery()
-                        .eq(Contest::getId, contestId)
-                        .notIn(Contest::getStatus, ContestStatus.DRAFT, ContestStatus.SCHEDULED)
-        );
-        if (contest == null){
-            throw new BaseException("该比赛不存在/未开开始");
-        }
+        Contest contest = requireVisibleContest(contestId, loginUser);
 
         ContestSubmissionDetailVo vo =
                 BeanUtil.copyProperties(submission, ContestSubmissionDetailVo.class);
         vo.setContestId(contestId);
         vo.setContestTitle(contest.getTitle());
+        BeanUtil.copyProperties(submissionStatusService.getStatus(submissionId, SubmissionType.CONTEST, contestId, true), vo);
+        User author = userMapper.selectById(submission.getUserId());
+        vo.setUsername(author == null ? "已注销用户" : author.getUsername());
+        ContestProblem problem = contestProblemMapper.selectOne(Wrappers.<ContestProblem>lambdaQuery()
+                .eq(ContestProblem::getContestId, contestId)
+                .eq(ContestProblem::getProblemId, submission.getProblemId()));
+        if (problem != null) {
+            vo.setProblemName(problem.getDisplayName());
+            vo.setProblemCode(problem.getDisplayCode());
+        }
         if (
                 // 比赛期间, 不允许获取查看其他人的代码
                 (
@@ -234,6 +243,23 @@ public class ContestSubmissionServiceImpl extends ServiceImpl<SubmissionMapper, 
         return vo;
     }
 
+
+    /** 校验比赛访问规则后获取缓存结果，不经由普通提交接口。 */
+    @Override
+    public SubmissionStatusVo getContestSubmissionStatus(Long contestId, Long submissionId, LoginUser loginUser) {
+        requireVisibleContest(contestId, loginUser);
+        return submissionStatusService.getStatus(submissionId, SubmissionType.CONTEST, contestId, false);
+    }
+
+    /** 详情和状态接口共用当前比赛访问规则。 */
+    private Contest requireVisibleContest(Long contestId, LoginUser loginUser) {
+        if (loginUser == null) throw new BaseException("请先登录");
+        Contest contest = contestMapper.selectOne(Wrappers.<Contest>lambdaQuery()
+                .eq(Contest::getId, contestId)
+                .notIn(Contest::getStatus, ContestStatus.DRAFT, ContestStatus.SCHEDULED));
+        if (contest == null) throw new BaseException("该比赛不存在或尚未开始");
+        return contest;
+    }
 
     /**
      * 尝试提交到普通测评

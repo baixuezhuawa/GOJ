@@ -158,7 +158,7 @@ public class SecurityConfig {
 
                         // 开放提交查询接口
                         .requestMatchers(
-                                new RegexRequestMatcher("^/submission/[0-9]+$", HttpMethod.GET.name())
+                                new RegexRequestMatcher("^/submission/[0-9]+(?:/status)?$", HttpMethod.GET.name())
                         ).permitAll()
 
 

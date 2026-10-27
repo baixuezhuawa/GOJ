@@ -55,6 +55,7 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
     private final SysProperties sysProperties;
 
     private final PageFactory pageFactory;
+    private final SubmissionStatusService submissionStatusService;
 
     @Value("${goj.judge.task.max-attempts}")
     private Integer maxAttempts;
@@ -142,6 +143,8 @@ public class SubmissionServiceImpl extends ServiceImpl<SubmissionMapper, Submiss
 
         SubmissionDetailVo vo = new SubmissionDetailVo();
         BeanUtil.copyProperties(submission, vo);
+        // 首次详情读取也刷新判题摘要，避免下一次轮询命中上一轮的终态缓存。
+        BeanUtil.copyProperties(submissionStatusService.getStatus(submissionId, SubmissionType.REGULAR, null, true), vo);
         vo.setUsername(userMapper.selectById(submission.getUserId()).getUsername());
         Problem problem = problemMapper.selectById(submission.getProblemId());
         vo.setProblemName(problem.getProblemName());

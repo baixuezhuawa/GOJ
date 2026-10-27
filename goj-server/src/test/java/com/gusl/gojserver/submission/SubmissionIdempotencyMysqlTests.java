@@ -201,7 +201,7 @@ class SubmissionIdempotencyMysqlTests {
             if (fallback) when(problems.selectOne(any())).thenReturn(null, problem);
             else when(problems.selectOne(any())).thenReturn(problem);
             ContestSubmissionServiceImpl target = new ContestSubmissionServiceImpl(submissions, problems, tasks,
-                    participants, regular(submissions, tasks), properties, validator, mock(PageFactory.class), contests);
+                    participants, regular(submissions, tasks), properties, validator, mock(PageFactory.class), contests, mock(com.gusl.gojserver.submission.application.SubmissionStatusService.class), mock(UserMapper.class));
             ReflectionTestUtils.setField(target, "maxAttempts", 3);
             ContestSubmissionService contest = proxy(target, ContestSubmissionService.class);
             ContestSubmission2JudgeDto dto = new ContestSubmission2JudgeDto();
@@ -247,7 +247,7 @@ class SubmissionIdempotencyMysqlTests {
         when(problems.selectCount(any())).thenReturn(1L);
         when(datasets.selectCount(any())).thenReturn(1L);
         SubmissionServiceImpl target = new SubmissionServiceImpl(mapper, mock(UserMapper.class), problems,
-                datasets, taskMapper, validator, properties, mock(PageFactory.class));
+                datasets, taskMapper, validator, properties, mock(PageFactory.class), mock(com.gusl.gojserver.submission.application.SubmissionStatusService.class));
         ReflectionTestUtils.setField(target, "maxAttempts", 3);
         return proxy(target, SubmissionService.class);
     }

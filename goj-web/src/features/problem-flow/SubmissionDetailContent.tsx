@@ -10,6 +10,7 @@ interface SubmissionDetailContentProps {
   error: string | null;
   onRetry: () => void;
   editorHeight?: string;
+  problemHref?: string | null;
 }
 
 export function SubmissionDetailContent({
@@ -18,6 +19,7 @@ export function SubmissionDetailContent({
   error,
   onRetry,
   editorHeight = "470px",
+  problemHref,
 }: SubmissionDetailContentProps) {
   if (loading && !submission) {
     return <CatLoader label="正在等待判题消息..." />;
@@ -67,7 +69,8 @@ export function SubmissionDetailContent({
         <div><dt>Language</dt><dd>{submission.language}</dd></div>
         <div>
           <dt>Problem</dt>
-          <dd><Link to={`/problems/${submission.problemId}`}>{`#${submission.problemId} ${submission.problemName}`}</Link></dd>
+          <dd>{problemHref === null ? submission.problemName :
+            <Link to={problemHref ?? `/problems/${submission.problemId}`}>{`#${submission.problemId} ${submission.problemName}`}</Link>}</dd>
         </div>
       </dl>
 

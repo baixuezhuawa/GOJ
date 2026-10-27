@@ -14,6 +14,10 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 public class SubmissionDetailVo {
 
+    /** 当前判题轮次与得分。 */
+    private Integer version;
+    private Integer score;
+
     @Schema(description = "提交id")
     private Long id;
 

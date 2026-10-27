@@ -11,6 +11,7 @@ import com.gusl.gojserver.contest.application.vo.ContestSubmissionDetailVo;
 import com.gusl.gojserver.contest.application.vo.ContestSubmissionListVo;
 import com.gusl.gojserver.submission.application.vo.SubmissionVo;
 import com.gusl.gojserver.submission.application.model.SubmissionRequestIdentity;
+import com.gusl.gojserver.submission.application.vo.SubmissionStatusVo;
 
 public interface ContestSubmissionService extends IService<Submission> {
 
@@ -40,4 +41,7 @@ public interface ContestSubmissionService extends IService<Submission> {
      * @return ContestSubmissionDetailVo
      */
     ContestSubmissionDetailVo getContestSubmissionDetail(Long contestId, Long submissionId, LoginUser loginUser);
+
+    /** 校验比赛访问范围后查询判题摘要。 */
+    SubmissionStatusVo getContestSubmissionStatus(Long contestId, Long submissionId, LoginUser loginUser);
 }

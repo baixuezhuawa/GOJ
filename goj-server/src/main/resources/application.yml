@@ -1,4 +1,19 @@
 goj:
+  submission-cache:
+    enabled: ${GOJ_SUBMISSION_CACHE_ENABLED:false} # Canal 配置完成后启用，仅支持单实例 Server 写缓存
+    host: ${GOJ_CANAL_HOST:127.0.0.1}
+    port: 11111
+    destination: goj
+    database: goj
+    username: ${GOJ_CANAL_USERNAME:}
+    password: ${GOJ_CANAL_PASSWORD:}
+    active-ttl-seconds: 30 # 非终态过期兜底
+    terminal-ttl-seconds: 1200 # 终态保留 20 分钟
+    terminal-jitter-seconds: 120 # 额外增加 0～120 秒随机时间
+    verify-after-seconds: 30 # 活跃访问时定期核验主库，兜底上游静默故障，不续期
+    max-lag-seconds: 30 # 事件积压超过此时间时查询绕过缓存
+    retry-millis: 3000
+    batch-size: 100
   judge:
     task:
       dispatch-interval-ms: 3000 # 扫描间隔 / ms

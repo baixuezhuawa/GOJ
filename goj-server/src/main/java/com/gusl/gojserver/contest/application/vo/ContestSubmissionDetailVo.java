@@ -13,6 +13,12 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 public class ContestSubmissionDetailVo {
 
+    /** 当前判题轮次与得分，供状态轮询覆盖展示。 */
+    private Integer version;
+    private Integer score;
+    /** 比赛题目编号，避免跳转到普通题目入口。 */
+    private String problemCode;
+
     @Schema(description = "提交id")
     private Long id;
 

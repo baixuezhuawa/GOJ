@@ -2,6 +2,7 @@ import { apiRequest } from "./client";
 import type {
   PageResult,
   SubmissionDetail,
+  SubmissionStatus,
   SubmissionListItem,
   SubmissionRequest,
   SubmissionResult,
@@ -39,5 +40,12 @@ export function getSubmissionDetail(submissionId: number, signal?: AbortSignal) 
   return apiRequest<SubmissionDetail>(`/submission/${submissionId}`, {
     method: "GET",
     signal,
+  });
+}
+
+/** 轮询只请求结果摘要，不重复加载源码和题目信息。 */
+export function getSubmissionStatus(submissionId: number, signal?: AbortSignal) {
+  return apiRequest<SubmissionStatus>(`/submission/${submissionId}/status`, {
+    method: "GET", signal,
   });
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getSubmissionDetail } from "../../api/submission";
+import { getSubmissionDetail, getSubmissionStatus } from "../../api/submission";
 import type { SubmissionDetail } from "../../types/api";
 import { isActiveSubmissionStatus } from "./submissionStatus";
 
@@ -28,6 +28,21 @@ export function useSubmissionDetail(submissionId: number | null) {
     setLoading(true);
     setError(null);
 
+    async function poll() {
+      try {
+        const result = await getSubmissionStatus(validSubmissionId, controller.signal);
+        if (controller.signal.aborted) return;
+        // null 也要覆盖旧字段，重判时不能残留上一轮结果。
+        setSubmission((current) => current ? { ...current, ...result } : current);
+        if (isActiveSubmissionStatus(result.status)) {
+          timer = setTimeout(() => void poll(), pollingIntervalMs);
+        }
+      } catch (requestError) {
+        if (controller.signal.aborted) return;
+        setError(requestError instanceof Error ? requestError.message : "判题状态加载失败");
+      }
+    }
+
     async function load() {
       try {
         const detail = await getSubmissionDetail(validSubmissionId, controller.signal);
@@ -35,7 +50,7 @@ export function useSubmissionDetail(submissionId: number | null) {
         setSubmission(detail);
         setLoading(false);
         if (isActiveSubmissionStatus(detail.status)) {
-          timer = setTimeout(() => void load(), pollingIntervalMs);
+          timer = setTimeout(() => void poll(), pollingIntervalMs);
         }
       } catch (requestError) {
         if (requestError instanceof DOMException && requestError.name === "AbortError") return;

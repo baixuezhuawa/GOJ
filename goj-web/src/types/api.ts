@@ -98,6 +98,8 @@ export interface SubmissionSearchQuery {
 }
 
 export interface SubmissionDetail {
+  version: number;
+  score: number | null;
   id: number;
   username: string;
   language: string;
@@ -112,6 +114,16 @@ export interface SubmissionDetail {
   judgeEndTime: string | null;
   judgeMsg: string | null;
   compilerMsg: string | null;
+}
+
+export type SubmissionStatus = Pick<SubmissionDetail,
+  "id" | "version" | "score" | "status" | "timeMs" | "memoryKb" |
+  "compilerMsg" | "judgeMsg" | "judgeStartTime" | "judgeEndTime">;
+
+export interface ContestSubmissionDetail extends SubmissionDetail {
+  contestId: number;
+  contestTitle: string;
+  problemCode: string | null;
 }
 
 export type ProblemProgressStatus =

@@ -8,6 +8,8 @@ import com.gusl.gojserver.submission.application.vo.SubmissionDetailVo;
 import com.gusl.gojserver.submission.application.vo.SubmissionListVo;
 import com.gusl.gojserver.submission.application.vo.SubmissionVo;
 import com.gusl.gojserver.submission.application.SubmissionService;
+import com.gusl.gojserver.submission.application.SubmissionStatusService;
+import com.gusl.common.constant.SubmissionType;
 import com.gusl.gojserver.submission.application.SubmissionIdempotencyService;
 import com.gusl.gojserver.submission.application.model.SubmissionRequestIdentity;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,6 +28,7 @@ import java.util.List;
 public class SubmissionController extends BaseController {
 
     private final SubmissionService submissionService;
+    private final SubmissionStatusService submissionStatusService;
     private final SubmissionIdempotencyService submissionIdempotencyService;
 
 
@@ -34,8 +37,11 @@ public class SubmissionController extends BaseController {
     @PostMapping("/submit")
     public Result submission(@RequestBody Submission2JudgeDto submission2JudgeDto, @AuthenticationPrincipal LoginUser loginUser) {
         SubmissionRequestIdentity identity = SubmissionRequestIdentity.regular(submission2JudgeDto);
-        SubmissionVo submissionVo = submissionIdempotencyService.execute(loginUser.getUserId(), identity,
-                () -> submissionService.submitProblemToJudge(submission2JudgeDto, loginUser, identity));
+        SubmissionVo submissionVo = submissionIdempotencyService.execute(
+                loginUser.getUserId(),
+                identity,
+                () -> submissionService.submitProblemToJudge(submission2JudgeDto, loginUser, identity)
+        );
         return success("你肯定会AC的, 直接看下一题吧! 哈哈哈", submissionVo);
     }
 
@@ -47,6 +53,15 @@ public class SubmissionController extends BaseController {
     public Result submitStatus(@PathVariable Long submissionId) {
         SubmissionDetailVo vo = submissionService.getSubmissionById(submissionId);
         return success("操作成功", vo);
+    }
+
+    /** 查询普通提交判题摘要，不返回源码及比赛提交。 */
+    @GetMapping("/{submissionId}/status")
+    public Result getStatus(@PathVariable Long submissionId) {
+        return success(
+                "操作成功",
+                submissionStatusService.getStatus(submissionId, SubmissionType.REGULAR, null, false)
+        );
     }
 
 }

@@ -35,6 +35,11 @@ const ContestListPage = lazy(() =>
     default: module.ContestListPage,
   })),
 );
+const ContestSubmissionDetailPage = lazy(() =>
+  import("./features/contests/ContestSubmissionDetailPage").then((module) => ({
+    default: module.ContestSubmissionDetailPage,
+  })),
+);
 const ProfilePage = lazy(() =>
   import("./features/profile/ProfilePage").then((module) => ({
     default: module.ProfilePage,
@@ -63,6 +68,7 @@ export default function App() {
         <Route path="/submissions" element={<SubmissionListPage />} />
         <Route path="/submissions/:submissionId" element={<SubmissionDetailPage />} />
         <Route path="/contests" element={<ContestListPage />} />
+        <Route path="/contests/:contestId/submissions/:submissionId" element={<ContestSubmissionDetailPage />} />
         <Route
           path="/contests/:contestId"
           element={
