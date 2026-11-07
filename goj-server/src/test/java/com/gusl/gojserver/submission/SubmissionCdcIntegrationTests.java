@@ -43,7 +43,9 @@ class SubmissionCdcIntegrationTests {
         String database = "goj_cdc_test_" + UUID.randomUUID().toString().replace("-", "");
         String password = System.getenv("GOJ_MYSQL_PASSWORD");
         String server = System.getenv().getOrDefault("GOJ_TEST_MYSQL_SERVER_URL", "jdbc:mysql://127.0.0.1:3306/");
-        Path canalHome = Path.of(System.getenv().getOrDefault("GOJ_CANAL_HOME", "D:/Work/Canal"));
+        String canalDirectory = System.getenv("GOJ_CANAL_HOME");
+        assertTrue(canalDirectory != null && !canalDirectory.isBlank(), "请设置 GOJ_CANAL_HOME 环境变量为 Canal 安装目录");
+        Path canalHome = Path.of(canalDirectory);
         Path work = Path.of("target", database).toAbsolutePath();
         Files.createDirectories(work.resolve("conf/cdc_test"));
         JdbcTemplate admin = new JdbcTemplate(new DriverManagerDataSource(server, "root", password));

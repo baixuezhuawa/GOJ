@@ -34,7 +34,16 @@ Judge 提交 MySQL 事务 → binlog → Canal TCP 实例 → `SubmissionCanalCo
 
 ## 本机启动
 
-安装目录为 `D:\Work\Canal`，版本 1.1.7。客户端使用同版本的 `canal.client` 与 `canal.protocol`。
+安装目录由 `GOJ_CANAL_HOME` 环境变量指定，版本 1.1.7。客户端使用同版本的 `canal.client` 与 `canal.protocol`。
+
+首次配置时，将实际安装目录保存为当前 Windows 用户的环境变量，并设置当前终端的值：
+
+```powershell
+[Environment]::SetEnvironmentVariable('GOJ_CANAL_HOME', 'D:\Work\Infrastructure\Canal', 'User')
+$env:GOJ_CANAL_HOME = 'D:\Work\Infrastructure\Canal'
+```
+
+用户环境变量会持久保存，无需配置系统级环境变量。已打开的终端和 IDE 需要重启，或在其进程环境中显式设置该变量。启动脚本和真实 CDC 测试共用此变量，不再使用固定安装目录。
 
 本机运行值已核验为 `log_bin=ON`、`binlog_format=ROW`、`binlog_row_image=FULL`、`server_id=1`；复制账号为 `canal@127.0.0.1`。无需为了本功能重启 MySQL。
 
@@ -68,7 +77,7 @@ canal.instance.filter.regex=goj\\.submission
 .\scripts\start-canal.ps1
 ```
 
-重启使用 `-Restart`。脚本隐藏启动 Java，不使用安装包旧的调试参数；只管理自身 PID 文件记录的进程。查看 `D:\Work\Canal\logs\goj\goj.log` 和 `logs\canal\canal.log`。启动脚本不会修改实例配置或重置位点。
+重启使用 `-Restart`；临时指定目录可使用 `-CanalHome '实际安装目录'`，优先于环境变量。脚本隐藏启动 Java，不使用安装包旧的调试参数；只管理自身 PID 文件记录的进程。查看安装目录下的 `logs\goj\goj.log` 和 `logs\canal\canal.log`。启动脚本不会修改实例配置或重置位点。
 
 启动 goj-server 的进程环境增加 `GOJ_SUBMISSION_CACHE_ENABLED=true`；默认关闭时状态接口仍可用，但直接查数据库，不消费 Canal、不写缓存。IDE 启动需要在运行配置设置该变量。前端仍按原方式启动，Java 和 Canal 配置变更均需重启相应进程，前端开发服务器支持热更新。
 

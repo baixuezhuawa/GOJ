@@ -1,10 +1,11 @@
 param(
-    [string]$CanalHome = 'D:\Work\Canal',
+    [string]$CanalHome = $env:GOJ_CANAL_HOME,
     [switch]$Restart
 )
 $ErrorActionPreference = 'Stop'
 
 # 使用安装包既有配置和复制账号，不在启动参数或日志中输出密码。
+if ([string]::IsNullOrWhiteSpace($CanalHome)) { throw '请设置 GOJ_CANAL_HOME 环境变量或通过 -CanalHome 指定 Canal 安装目录' }
 $canalRoot = (Resolve-Path -LiteralPath $CanalHome).Path
 $config = Join-Path $canalRoot 'conf\canal.properties'
 if (-not (Test-Path -LiteralPath $config)) { throw 'Canal 配置文件不存在' }
