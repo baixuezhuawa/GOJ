@@ -1,9 +1,26 @@
 package com.gusl.common.constant;
 
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * 测评相关常量量
  */
 public final class JudgingConstant {
+
+
+    /** 终态集合，用于防止同一提交重复触发统计更新。 */
+    public static final Set<String> TERMINAL_STATUSES = new HashSet<>(Arrays.asList(
+            JudgingConstant.COMPILE_ERROR,
+            JudgingConstant.WRONG_ANSWER,
+            JudgingConstant.ACCEPTED,
+            JudgingConstant.TIME_LIMIT_EXCEEDED,
+            JudgingConstant.MEMORY_LIMIT_EXCEEDED,
+            JudgingConstant.RUNTIME_ERROR,
+            SystemConstant.SYSTEM_ERROR
+    ));
+
 
     // 运行状态
     /** 处于队列 */
